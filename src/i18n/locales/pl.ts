@@ -11,6 +11,83 @@ export const pl = {
     reject: 'Odrzuć',
     settings: 'Ustawienia'
   },
+  booking: {
+    title: 'Zarezerwuj Sesję',
+    steps: {
+      date: 'Data i Czas',
+      contact: 'Dane Kontaktowe',
+      payment: 'Płatność'
+    },
+    date: {
+      title: 'Wybierz Datę i Godzinę',
+      selectDate: 'Wybierz datę',
+      selectTime: 'Wybierz godzinę',
+      noTimeSlots: 'Brak dostępnych godzin w tym dniu',
+      loading: 'Ładowanie dostępnych godzin...',
+      durationLabel: 'Czas trwania:',
+      availability: {
+        available: 'Dostępne',
+        unavailable: 'Niedostępne'
+      }
+    },
+    contact: {
+      title: 'Twoje Dane Kontaktowe',
+      name: 'Imię i Nazwisko',
+      namePlaceholder: 'Wprowadź swoje imię i nazwisko',
+      email: 'Adres Email',
+      emailPlaceholder: 'Wprowadź swój adres email',
+      phone: 'Numer Telefonu',
+      phonePlaceholder: 'Wprowadź swój numer telefonu',
+      numberOfPeople: 'Liczba Osób',
+      promoCode: 'Kod Promocyjny (opcjonalnie)',
+      promoCodePlaceholder: 'Wprowadź kod promocyjny jeśli posiadasz',
+      comment: 'Dodatkowe Uwagi',
+      commentPlaceholder: 'Dodatkowe informacje lub specjalne prośby'
+    },
+    payment: {
+      title: 'Metoda Płatności',
+      summary: 'Podsumowanie Rezerwacji',
+      package: 'Pakiet',
+      date: 'Data',
+      time: 'Godzina',
+      people: 'Liczba osób',
+      totalAmount: 'Całkowita kwota',
+      method: 'Wybierz Metodę Płatności',
+      fullPayment: 'Pełna Płatność',
+      fullPaymentDesc: 'Zapłać pełną kwotę teraz, aby potwierdzić rezerwację',
+      depositPayment: 'Tylko Zaliczka',
+      depositPaymentDesc: 'Zapłać zaliczkę teraz, a resztę przy przybyciu',
+      provider: 'Bezpieczne płatności obsługiwane przez:'
+    },
+    calendar: {
+      monthNames: 'Styczeń_Luty_Marzec_Kwiecień_Maj_Czerwiec_Lipiec_Sierpień_Wrzesień_Październik_Listopad_Grudzień',
+      dayNames: 'Pon_Wt_Śr_Czw_Pt_Sob_Nd',
+      today: 'Dzisiaj',
+      nextMonth: 'Następny miesiąc',
+      prevMonth: 'Poprzedni miesiąc'
+    },
+    validation: {
+      dateRequired: 'Proszę wybrać datę',
+      timeRequired: 'Proszę wybrać godzinę',
+      nameRequired: 'Proszę podać imię i nazwisko',
+      emailRequired: 'Proszę podać adres email',
+      emailInvalid: 'Proszę podać prawidłowy adres email',
+      phoneRequired: 'Proszę podać numer telefonu',
+      phoneInvalid: 'Proszę podać prawidłowy numer telefonu'
+    },
+    buttons: {
+      back: 'Wstecz',
+      next: 'Dalej',
+      book: 'Zarezerwuj',
+      processing: 'Przetwarzanie...'
+    },
+    success: {
+      message: 'Twoja rezerwacja została pomyślnie złożona! Wkrótce otrzymasz e-mail z potwierdzeniem.'
+    },
+    error: {
+      message: 'Wystąpił błąd podczas przetwarzania rezerwacji. Spróbuj ponownie.'
+    }
+  },
   happyHours: {
     title: 'HAPPY HOURS',
     subtitle: 'Specjalna oferta dla rannych ptaszków!',

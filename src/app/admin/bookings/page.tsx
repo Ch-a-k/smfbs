@@ -13,14 +13,6 @@ import Link from 'next/link';
 // Типы для вкладок администратора
 type AdminTab = 'calendar' | 'list' | 'analytics' | 'create';
 
-// Расширение интерфейса Booking для обработки данных API
-// Здесь мы указываем дополнительные поля, которые могут прийти от API,
-// но они все уже есть в Booking, просто с более строгими типами
-interface ApiBooking extends Omit<Booking, 'createdAt'> {
-  bookingDate?: string;
-  createdAt?: string | Date; // В API может быть undefined
-}
-
 export default function AdminBookingsPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('calendar');
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -29,97 +21,46 @@ export default function AdminBookingsPage() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showBookingDetails, setShowBookingDetails] = useState(false);
   
-  // Загрузка бронирований при монтировании компонента
+  // Загрузка бронирований
+  useEffect(() => {
+    fetchBookings();
+  }, []);
+  
+  // Функция загрузки бронирований
   const fetchBookings = async () => {
     setIsLoading(true);
     try {
-      console.log('Начинаем загрузку бронирований...');
-      const res = await fetch('/api/bookings');
-      
-      if (!res.ok) {
-        throw new Error(`Ошибка загрузки: ${res.status} ${res.statusText}`);
+      const response = await fetch('/api/bookings');
+      if (!response.ok) {
+        throw new Error('Failed to fetch bookings');
       }
+      const data = await response.json();
+      console.log('Загруженные бронирования:', data);
       
-      // Получаем данные из ответа
-      const data = await res.json();
-      console.log('Получены данные бронирований:', data);
-      
-      // Проверка структуры ответа API - ожидаем массив бронирований
-      if (Array.isArray(data)) {
-        // Теперь API возвращает массив напрямую
-        const bookingsArray = data || [];
-        console.log(`Получен массив из ${bookingsArray.length} бронирований`);
+      // Проверяем, правильно ли сформированы объекты бронирований
+      if (Array.isArray(data) && data.length > 0) {
+        console.log('Пример бронирования:', data[0]);
+        console.log('Поле date:', data[0].date);
+        console.log('Поле bookingDate:', data[0].bookingDate);
         
-        // Подготовка данных для календаря
-        const transformedBookings = bookingsArray.map((booking: ApiBooking) => {
-          if (!booking) return booking;
-          
-          const updatedBooking: ApiBooking = { ...booking };
-          
-          // Убеждаемся, что у каждого бронирования есть поле date
-          if (!updatedBooking.date && updatedBooking.bookingDate) {
-            updatedBooking.date = updatedBooking.bookingDate;
-          } else if (!updatedBooking.date && updatedBooking.createdAt) {
-            const createdAt = updatedBooking.createdAt;
-            if (typeof createdAt === 'string') {
-              updatedBooking.date = createdAt.split('T')[0];
-            } else if (createdAt instanceof Date) {
-              updatedBooking.date = format(createdAt, 'yyyy-MM-dd');
-            }
-          }
-          
-          return updatedBooking;
-        }).filter(Boolean) as Booking[]; // Фильтруем undefined и null значения
+        // Убедимся, что все поля даты корректно преобразованы
+        const mappedData = data.map(booking => ({
+          ...booking,
+          // Убедимся, что у каждого бронирования есть поле date
+          date: booking.date || booking.bookingDate || 
+            (booking.createdAt ? new Date(booking.createdAt).toISOString().split('T')[0] : null)
+        }));
         
-        console.log(`Обработано ${transformedBookings.length} бронирований:`, 
-          transformedBookings.length > 0 ? transformedBookings[0] : 'нет бронирований');
-          
-        setBookings(transformedBookings);
-      } else if (data && data.bookings && Array.isArray(data.bookings)) {
-        // Для обратной совместимости - если API вернул старый формат
-        const bookingsArray = data.bookings || [];
-        console.log(`Получен массив из объекта bookings: ${bookingsArray.length} бронирований`);
-        
-        // Формат ответа был изменен, но на всякий случай оставляем обработку старого формата
-        const transformedBookings = bookingsArray
-          .map((booking: ApiBooking) => {
-            if (!booking) return booking;
-            
-            const updatedBooking: ApiBooking = { ...booking };
-            
-            // Убеждаемся, что у каждого бронирования есть поле date
-            if (!updatedBooking.date && updatedBooking.bookingDate) {
-              updatedBooking.date = updatedBooking.bookingDate;
-            } else if (!updatedBooking.date && updatedBooking.createdAt) {
-              const createdAt = updatedBooking.createdAt;
-              if (typeof createdAt === 'string') {
-                updatedBooking.date = createdAt.split('T')[0];
-              } else if (createdAt instanceof Date) {
-                updatedBooking.date = format(createdAt, 'yyyy-MM-dd');
-              }
-            }
-            
-            return updatedBooking;
-          })
-          .filter(Boolean) as Booking[];
-          
-        setBookings(transformedBookings);
+        setBookings(mappedData);
       } else {
-        console.error('Неверный формат данных бронирований:', data);
-        setBookings([]);
+        setBookings(data);
       }
     } catch (error) {
-      console.error('Ошибка при загрузке бронирований:', error);
-      setBookings([]);
+      console.error('Error loading bookings:', error);
     } finally {
       setIsLoading(false);
     }
   };
-  
-  // Загрузка бронирований при монтировании компонента
-  useEffect(() => {
-    fetchBookings();
-  }, []);
   
   // Обработчик просмотра деталей бронирования
   const handleViewBooking = (booking: Booking) => {
@@ -314,9 +255,13 @@ export default function AdminBookingsPage() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'calendar':
-        // Проверяем наличие данных для отображения в календаре
+        console.log('Отображение календаря с бронированиями:', { 
+          bookingsCount: bookings.length,
+          selectedDate,
+          hasBookingsForDate: bookings.filter(b => b.date === selectedDate || b.bookingDate === selectedDate).length
+        });
         return (
-          <AdminBookingCalendar 
+          <AdminBookingCalendar
             bookings={bookings}
             selectedDate={selectedDate}
             onDateSelect={handleDateSelect}
@@ -340,6 +285,10 @@ export default function AdminBookingsPage() {
 
   // Обработчик изменения выбранной даты в календаре
   const handleDateSelect = (date: string) => {
+    console.log('Выбрана новая дата в календаре:', date);
+    console.log('Бронирования на выбранную дату:', bookings.filter(b => 
+      b.date === date || b.bookingDate === date
+    ));
     setSelectedDate(date);
   };
   
@@ -364,14 +313,10 @@ export default function AdminBookingsPage() {
     
     // Доход за текущий и прошлый месяцы
     const currentMonthRevenue = currentMonthBookings.reduce((sum, booking) => 
-      sum + (booking.paymentStatus === 'FULLY_PAID' 
-        ? (booking.totalAmount || booking.totalPrice || 0) 
-        : (booking.paidAmount || 0)), 0);
-        
+      sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount : booking.paidAmount), 0);
+      
     const previousMonthRevenue = previousMonthBookings.reduce((sum, booking) => 
-      sum + (booking.paymentStatus === 'FULLY_PAID' 
-        ? (booking.totalAmount || booking.totalPrice || 0) 
-        : (booking.paidAmount || 0)), 0);
+      sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount : booking.paidAmount), 0);
     
     // Статистика по комнатам
     const roomStats = [1, 2, 3, 4].map(roomId => {
@@ -380,25 +325,21 @@ export default function AdminBookingsPage() {
         roomId,
         bookingsCount: roomBookings.length,
         revenue: roomBookings.reduce((sum, booking) => 
-          sum + (booking.paymentStatus === 'FULLY_PAID' 
-            ? (booking.totalAmount || booking.totalPrice || 0) 
-            : (booking.paidAmount || 0)), 0)
+          sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount : booking.paidAmount), 0)
       };
     });
     
     // Статистика по пакетам
     const packageIds = [...new Set(bookings.map(booking => booking.packageId))];
     const packageStats = packageIds.map(packageId => {
-      const packageName = bookings.find(b => b.packageId === packageId)?.packageName || packageId.toString();
+      const packageName = bookings.find(b => b.packageId === packageId)?.packageName || packageId;
       const packageBookings = currentMonthBookings.filter(booking => booking.packageId === packageId);
       return {
         packageId,
         packageName,
         bookingsCount: packageBookings.length,
         revenue: packageBookings.reduce((sum, booking) => 
-          sum + (booking.paymentStatus === 'FULLY_PAID' 
-            ? (booking.totalAmount || booking.totalPrice || 0) 
-            : (booking.paidAmount || 0)), 0)
+          sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount : booking.paidAmount), 0)
       };
     });
     

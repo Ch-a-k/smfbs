@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import { Booking, BookingFormData, TimeSlot, Room, mapDatabaseBookingToBooking, PaymentStatus } from '@/types/booking';
+import { Booking, BookingFormData, TimeSlot, Room } from '@/types/booking';
 // Импортируем общие данные
 import { bookings, packages, rooms, promoCodes } from './data';
 // Временно отключаем для тестирования
@@ -159,40 +159,11 @@ function minutesToTime(minutes: number): string {
   return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
 }
 
-// Helper function to calculate duration in minutes
-function calculateDuration(startTime: string | null, endTime: string | null): number {
-  if (!startTime || !endTime) return 60; // Default duration
-  
-  try {
-    const [startHour, startMinute] = startTime.split(':').map(Number);
-    const [endHour, endMinute] = endTime.split(':').map(Number);
-    
-    let durationMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
-    if (durationMinutes <= 0) durationMinutes += 24 * 60; // Handle overnight
-    
-    return durationMinutes;
-  } catch (e) {
-    console.error('Error calculating duration:', e);
-    return 60; // Default to 60 minutes if calculation fails
-  }
-}
-
-// Helper function to calculate end time based on start time and duration
+// Расчет времени окончания бронирования по времени начала и продолжительности
 function calculateEndTime(startTime: string, durationMinutes: number): string {
-  if (!startTime) return '00:00';
-  
-  try {
-    const [hours, minutes] = startTime.split(':').map(Number);
-    
-    let totalMinutes = hours * 60 + minutes + durationMinutes;
-    const endHours = Math.floor(totalMinutes / 60) % 24;
-    const endMinutes = totalMinutes % 60;
-    
-    return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
-  } catch (e) {
-    console.error('Error calculating end time:', e);
-    return '00:00';
-  }
+  const startMinutes = timeToMinutes(startTime);
+  const endMinutes = startMinutes + durationMinutes;
+  return minutesToTime(endMinutes);
 }
 
 // Применение промокода
@@ -220,351 +191,339 @@ async function applyPromoCode(price: number, promoCode?: string): Promise<{ pric
   };
 }
 
-const formatDate = (date: Date | string): string => {
-  const d = new Date(date);
-  return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
-};
-
-// GET /api/bookings 
-export async function GET(request: Request) {
-  console.log('API: GET /api/bookings начал обработку запроса');
-  
+// Основные маршруты API
+export async function GET(request: NextRequest) {
   try {
-    const supabase = createClient();
-    
-    // Проверяем, успешно ли создан клиент Supabase
-    if (!supabase) {
-      console.error('API: Клиент Supabase не был создан');
-      return NextResponse.json(
-        { error: 'Ошибка подключения к базе данных' },
-        { status: 500 }
-      );
-    }
-    
-    // Получаем URL и параметры запроса
-    const url = new URL(request.url);
-    const id = url.searchParams.get('id');
-    
-    console.log(`API: Запрос бронирований${id ? ` с ID: ${id}` : ''}`);
-    
-    let query = supabase.from('bookings').select('*');
-    
-    // Если указан ID, получаем конкретное бронирование
-    if (id) {
-      query = query.eq('id', id);
-    }
-    
-    // Выполняем запрос к базе данных
-    const { data: bookings, error } = await query;
-    
-    if (error) {
-      console.error('API: Ошибка запроса бронирований:', error);
-      return NextResponse.json(
-        { error: 'Не удалось получить бронирования', details: error.message },
-        { status: 500 }
-      );
-    }
-    
-    if (!bookings || bookings.length === 0) {
-      console.log('API: Бронирования не найдены');
-      return NextResponse.json([], { status: 200 });
-    }
-    
-    console.log(`API: Найдено ${bookings.length} бронирований`);
-    
-    // Вспомогательная функция для форматирования даты
-    const formatDate = (date: string | Date | null): string => {
-      if (!date) return '';
-      try {
-        if (typeof date === 'string') {
-          // Если дата уже в формате ISO строки (YYYY-MM-DD)
-          if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-            return date;
-          }
-          // Разбираем строку в объект Date и форматируем
-          return new Date(date).toISOString().split('T')[0];
-        } else {
-          // Если date уже объект Date
-          return date.toISOString().split('T')[0];
-        }
-      } catch (e) {
-        console.error(`API: Ошибка форматирования даты: ${date}`, e);
-        return '';
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get('type');
+    const id = searchParams.get('id');
+    const date = searchParams.get('date');
+
+    // Получение всех бронирований
+    if (!type && !id) {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*, rooms(name), packages(name)')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching bookings:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
       }
-    };
-    
-    // Вспомогательная функция для расчета длительности
-    const calculateDuration = (startTime: string, endTime: string): number => {
-      if (!startTime || !endTime) return 60; // Значение по умолчанию
-      
-      const [startHour, startMinute] = startTime.split(':').map(Number);
-      const [endHour, endMinute] = endTime.split(':').map(Number);
-      
-      let durationMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
-      if (durationMinutes < 0) durationMinutes += 24 * 60; // Если переход через полночь
-      
-      return durationMinutes;
-    };
-    
-    // Трансформируем данные для клиента
-    const transformedBookings = bookings.map(booking => {
-      // Для диагностики форматов дат
-      console.log(`API: Трансформация бронирования ${booking.id}:`, {
-        original_booking_date: booking.booking_date,
-        original_created_at: booking.created_at
+
+      // Преобразование данных из базы данных в формат, ожидаемый клиентом
+      const bookings = data.map((booking) => {
+        // Обработка дат для гарантии наличия поля date
+        // Предпочтительно использовать booking_date, если оно есть
+        const formattedDate = booking.booking_date || 
+          (booking.created_at ? new Date(booking.created_at).toISOString().split('T')[0] : null);
+            
+        console.log(`Обработка бронирования ID ${booking.id}: date=${formattedDate}, booking_date=${booking.booking_date}`);
+        
+        return {
+          id: booking.id,
+          packageId: booking.package_id,
+          packageName: booking.packages?.name || '',
+          roomId: booking.room_id,
+          roomName: booking.rooms?.name || '',
+          customerName: booking.customer_name || '',
+          customerEmail: booking.customer_email || '',
+          customerPhone: booking.customer_phone || '',
+          // Гарантируем, что поле date всегда заполнено
+          date: formattedDate,
+          // Для совместимости сохраняем и оригинальное поле booking_date
+          bookingDate: booking.booking_date,
+          name: booking.customer_name || '', // Добавляем name для совместимости с формой календаря
+          email: booking.customer_email || '', // Добавляем email для совместимости с формой календаря
+          phone: booking.customer_phone || '', // Добавляем phone для совместимости с формой календаря
+          startTime: booking.start_time || '00:00',
+          endTime: booking.end_time || '00:00',
+          numPeople: booking.num_people || 1,
+          numberOfPeople: booking.num_people || 1, // Добавляем numberOfPeople для совместимости с формой календаря
+          notes: booking.notes || '',
+          comment: booking.notes || '', // Добавляем comment для совместимости с формой календаря
+          promoCode: booking.promo_code || '',
+          totalPrice: booking.total_price || 0,
+          totalAmount: booking.total_price || 0, // Добавляем totalAmount для совместимости с формой календаря
+          paymentStatus: booking.payment_status || 'UNPAID',
+          paidAmount: booking.paid_amount || 0,
+          status: booking.status || 'confirmed',
+          createdAt: booking.created_at || new Date().toISOString(),
+          updatedAt: booking.updated_at || booking.created_at || new Date().toISOString()
+        };
       });
-      
-      // Определяем дату бронирования
-      let bookingDate = null;
-      if (booking.booking_date) {
-        bookingDate = formatDate(booking.booking_date);
-        console.log(`API: Форматирование booking_date: ${booking.booking_date} -> ${bookingDate}`);
-      } else if (booking.created_at) {
-        bookingDate = formatDate(booking.created_at);
-        console.log(`API: Используем created_at вместо booking_date: ${booking.created_at} -> ${bookingDate}`);
-      } else {
-        console.log(`API: Ни booking_date, ни created_at не найдены для бронирования ${booking.id}`);
-        bookingDate = formatDate(new Date());
+
+      return NextResponse.json(bookings);
+    }
+
+    // Получение конкретного бронирования по ID
+    if (id) {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*, rooms(name), packages(name)')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        console.error(`Error fetching booking with id ${id}:`, error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
       }
-      
-      // Используем имена полей в соответствии с интерфейсом Booking
-      return {
-        id: booking.id,
-        customerName: booking.customer_name || 'Без имени',
-        customerPhone: booking.customer_phone || 'Без телефона',
-        customerEmail: booking.customer_email || '',
-        // Для совместимости с различными частями приложения
-        name: booking.customer_name || 'Без имени', // Альтернативное поле для customerName
-        phone: booking.customer_phone || 'Без телефона', // Альтернативное поле для customerPhone
-        email: booking.customer_email || '', // Альтернативное поле для customerEmail
-        
-        // Используем правильные поля даты и времени
-        date: bookingDate, // Основное поле даты
-        bookingDate: bookingDate, // Альтернативное поле для date
-        startTime: booking.start_time || '00:00',
-        endTime: booking.end_time || '00:00',
-        
-        // Данные о комнате и пакете
-        roomId: booking.room_id || 0,
-        roomName: booking.room_name || `Room ${booking.room_id || 0}`,
-        packageId: booking.package_id || 0,
-        packageName: booking.package_name || `Package ${booking.package_id || 0}`,
-        
-        // Информация о количестве людей
-        numPeople: booking.num_people || 1,
-        numberOfPeople: booking.num_people || 1, // Альтернативное поле для numPeople
-        
-        // Дополнительная информация
-        notes: booking.notes || '',
-        comment: booking.notes || '', // Альтернативное поле для notes
-        adminComment: booking.admin_comment || '',
-        promoCode: booking.promo_code || '',
-        
-        // Информация о платеже
-        totalPrice: booking.total_price || 0,
-        totalAmount: booking.total_price || 0, // Альтернативное поле для totalPrice
-        paymentStatus: (booking.payment_status?.toUpperCase() || 'UNPAID') as PaymentStatus,
-        paidAmount: booking.paid_amount || 0,
-        
-        // Статус и даты создания/обновления
-        status: booking.status || 'created',
-        createdAt: booking.created_at || new Date().toISOString(),
-        updatedAt: booking.updated_at || new Date().toISOString()
+
+      if (!data) {
+        return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+      }
+
+      const booking = {
+        id: data.id,
+        packageId: data.package_id,
+        packageName: data.packages?.name || '',
+        roomId: data.room_id,
+        roomName: data.rooms?.name || '',
+        customerName: data.customer_name || '',
+        customerEmail: data.customer_email || '',
+        customerPhone: data.customer_phone || '',
+        // Гарантируем, что поле date всегда заполнено
+        date: data.booking_date || (data.created_at ? new Date(data.created_at).toISOString().split('T')[0] : null),
+        // Для совместимости сохраняем и оригинальное поле booking_date
+        bookingDate: data.booking_date,
+        name: data.customer_name || '', // Добавляем name для совместимости с формой календаря
+        email: data.customer_email || '', // Добавляем email для совместимости с формой календаря
+        phone: data.customer_phone || '', // Добавляем phone для совместимости с формой календаря
+        startTime: data.start_time || '00:00',
+        endTime: data.end_time || '00:00',
+        numPeople: data.num_people || 1,
+        numberOfPeople: data.num_people || 1, // Добавляем numberOfPeople для совместимости с формой календаря
+        notes: data.notes || '',
+        comment: data.notes || '', // Добавляем comment для совместимости с формой календаря
+        promoCode: data.promo_code || '',
+        totalPrice: data.total_price || 0,
+        totalAmount: data.total_price || 0, // Добавляем totalAmount для совместимости с формой календаря
+        paymentStatus: data.payment_status || 'UNPAID',
+        paidAmount: data.paid_amount || 0,
+        status: data.status || 'confirmed',
+        createdAt: data.created_at || new Date().toISOString(),
+        updatedAt: data.updated_at || data.created_at || new Date().toISOString()
       };
-    });
-    
-    console.log(`API: Успешно трансформировано ${transformedBookings.length} бронирований`);
-    console.log('API: Пример трансформированного бронирования:', 
-      transformedBookings.length > 0 ? JSON.stringify(transformedBookings[0]) : 'нет бронирований');
-    
-    // ВАЖНО: Возвращаем массив напрямую, без обертки в объект!
-    // Компонент страницы ожидает массив, а не объект с полем bookings
-    return NextResponse.json(transformedBookings, { status: 200 });
-  } catch (e) {
-    console.error('API: Необработанная ошибка в GET /api/bookings:', e);
-    return NextResponse.json(
-      { error: 'Внутренняя ошибка сервера', details: e instanceof Error ? e.message : String(e) },
-      { status: 500 }
-    );
+
+      return NextResponse.json(booking);
+    }
+
+    // Получение слотов на определенную дату
+    if (type === 'slots' && date) {
+      // Получение существующих бронирований на эту дату
+      const { data: existingBookings, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('room_id, start_time, end_time')
+        .eq('booking_date', date)
+        .neq('status', 'cancelled');
+
+      if (bookingsError) {
+        console.error(`Error fetching existing bookings for date ${date}:`, bookingsError);
+        return NextResponse.json({ error: bookingsError.message }, { status: 500 });
+      }
+
+      // Преобразуем существующие бронирования в более удобный формат
+      const bookingsByRoom: Record<number, Array<{ start: string, end: string }>> = {};
+      
+      existingBookings?.forEach(booking => {
+        const roomId = booking.room_id;
+        if (!bookingsByRoom[roomId]) {
+          bookingsByRoom[roomId] = [];
+        }
+        
+        bookingsByRoom[roomId].push({
+          start: booking.start_time,
+          end: booking.end_time
+        });
+      });
+
+      // Получение всех комнат
+      const { data: rooms, error: roomsError } = await supabase
+        .from('rooms')
+        .select('*');
+
+      if (roomsError) {
+        console.error('Error fetching rooms:', roomsError);
+        return NextResponse.json({ error: roomsError.message }, { status: 500 });
+      }
+
+      // Генерация временных слотов
+      const timeSlots = generateTimeSlots();
+      const schedule = createRoomSchedule(rooms, timeSlots, bookingsByRoom);
+
+      return NextResponse.json(schedule);
+    }
+
+    return NextResponse.json({ error: 'Invalid request parameters' }, { status: 400 });
+  } catch (error) {
+    console.error('Unexpected error in GET /api/bookings:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-// POST /api/bookings
-export async function POST(request: Request) {
-  console.log('API: POST /api/bookings начал обработку запроса');
+// Функция для генерации временных слотов
+function generateTimeSlots() {
+  // Здесь можно настроить рабочее время
+  const startHour = 9; // 9 AM
+  const endHour = 22; // 10 PM
+  const intervalMinutes = 30;
   
-  try {
-    const supabase = createClient();
-    
-    // Проверяем, успешно ли создан клиент Supabase
-    if (!supabase) {
-      console.error('API: Клиент Supabase не был создан');
-      return NextResponse.json(
-        { error: 'Ошибка подключения к базе данных' },
-        { status: 500 }
-      );
-    }
-    
-    const data = await request.json();
-    console.log('API: Полученные данные для создания бронирования:', data);
-    
-    // Отображаем формат даты для диагностики
-    if (data.date) {
-      console.log(`API: Дата бронирования из запроса: ${data.date} (тип: ${typeof data.date})`);
-    }
-    
-    // Вспомогательная функция для расчета времени окончания
-    const calculateEndTime = (startTime: string, durationMinutes: number): string => {
-      if (!startTime) return '00:00';
+  const slots = [];
+  for (let hour = startHour; hour < endHour; hour++) {
+    for (let minute = 0; minute < 60; minute += intervalMinutes) {
+      const startTime = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
       
-      const [hours, minutes] = startTime.split(':').map(Number);
-      const totalMinutes = hours * 60 + minutes + durationMinutes;
+      // Вычисляем время окончания
+      let endHour = hour;
+      let endMinute = minute + intervalMinutes;
       
-      const endHours = Math.floor(totalMinutes / 60) % 24;
-      const endMinutes = totalMinutes % 60;
-      
-      return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
-    };
-    
-    // Получаем имя клиента из разных возможных полей
-    const customerName = data.customerName || data.name || data.clientName || '';
-    
-    // Создаем структуру данных совместимую с БД
-    const bookingData = {
-      customer_name: customerName,
-      customer_phone: data.customerPhone || data.phone || data.clientPhone || '',
-      customer_email: data.customerEmail || data.email || data.clientEmail || '',
-      booking_date: data.date, // Используем date из запроса
-      start_time: data.startTime || data.time || '00:00',
-      end_time: data.endTime || calculateEndTime(data.startTime || data.time || '00:00', data.duration || 60),
-      num_people: data.numPeople || data.numberOfPeople || 1,
-      room_id: data.roomId,
-      package_id: data.packageId,
-      status: data.status || 'confirmed',
-      payment_status: (data.paymentStatus || 'unpaid').toLowerCase(),
-      notes: data.notes || data.comment || '',
-      admin_comment: data.adminComment || '',
-      total_price: data.totalPrice || data.totalAmount || data.price || 0,
-      paid_amount: data.paidAmount || 0,
-      promo_code: data.promoCode || '',
-    };
-    
-    console.log('API: Подготовленные данные для БД:', bookingData);
-    
-    const { data: booking, error } = await supabase
-      .from('bookings')
-      .insert([bookingData])
-      .select()
-      .single();
-      
-    if (error) {
-      console.error('API: Ошибка создания бронирования:', error);
-      return NextResponse.json(
-        { error: 'Не удалось создать бронирование', details: error.message },
-        { status: 500 }
-      );
-    }
-    
-    console.log('API: Бронирование успешно создано:', booking);
-    
-    // Вспомогательная функция для форматирования даты
-    const formatDate = (date: string | Date | null): string => {
-      if (!date) return '';
-      try {
-        if (typeof date === 'string') {
-          // Если дата уже в формате ISO строки (YYYY-MM-DD)
-          if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-            return date;
-          }
-          // Разбираем строку в объект Date и форматируем
-          return new Date(date).toISOString().split('T')[0];
-        } else {
-          // Если date уже объект Date
-          return date.toISOString().split('T')[0];
-        }
-      } catch (e) {
-        console.error(`API: Ошибка форматирования даты: ${date}`, e);
-        return '';
+      if (endMinute >= 60) {
+        endHour += 1;
+        endMinute -= 60;
       }
-    };
-    
-    // Определяем дату бронирования
-    let bookingDate = '';
-    if (booking.booking_date) {
-      bookingDate = formatDate(booking.booking_date);
-    } else if (booking.created_at) {
-      bookingDate = formatDate(booking.created_at);
-    } else {
-      bookingDate = formatDate(new Date());
+      
+      // Проверяем, не превысили ли мы endHour
+      if (endHour >= endHour) {
+        const endTime = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}:00`;
+        
+        slots.push({
+          id: `${startTime}-${endTime}`,
+          startTime,
+          endTime
+        });
+      }
     }
-    
-    // Вспомогательная функция для расчета длительности
-    const calculateDuration = (startTime: string, endTime: string): number => {
-      if (!startTime || !endTime) return 60; // Значение по умолчанию
-      
-      const [startHour, startMinute] = startTime.split(':').map(Number);
-      const [endHour, endMinute] = endTime.split(':').map(Number);
-      
-      let durationMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
-      if (durationMinutes < 0) durationMinutes += 24 * 60; // Если переход через полночь
-      
-      return durationMinutes;
+  }
+  
+  return slots;
+}
+
+// Функция для создания расписания комнат
+function createRoomSchedule(
+  rooms: any[], 
+  timeSlots: any[], 
+  bookingsByRoom: Record<number, Array<{ start: string, end: string }>>
+) {
+  const roomSchedule = rooms.map(room => {
+    const daySchedule = {
+      roomId: room.id,
+      roomName: room.name,
+      slots: timeSlots.map(slot => {
+        const slotStartTime = slot.startTime;
+        const slotEndTime = slot.endTime;
+        
+        // Проверяем, есть ли пересечения с существующими бронированиями
+        let isAvailable = true;
+        
+        if (bookingsByRoom[room.id]) {
+          for (const booking of bookingsByRoom[room.id]) {
+            const bookingStartTime = booking.start;
+            const bookingEndTime = booking.end;
+            
+            // Проверяем пересечение времени
+            // Слот недоступен, если:
+            // 1. Начало слота находится между началом и концом бронирования или
+            // 2. Конец слота находится между началом и концом бронирования или
+            // 3. Начало бронирования находится между началом и концом слота или
+            // 4. Конец бронирования находится между началом и концом слота
+            if (
+              (slotStartTime >= bookingStartTime && slotStartTime < bookingEndTime) ||
+              (slotEndTime > bookingStartTime && slotEndTime <= bookingEndTime) ||
+              (bookingStartTime >= slotStartTime && bookingStartTime < slotEndTime) ||
+              (bookingEndTime > slotStartTime && bookingEndTime <= slotEndTime)
+            ) {
+              isAvailable = false;
+              break;
+            }
+          }
+        }
+        
+        return {
+          ...slot,
+          isAvailable
+        };
+      })
     };
     
-    // Преобразуем данные в формат, совместимый с интерфейсом Booking
-    const transformedBooking = {
-      id: booking.id,
-      customerName: booking.customer_name || 'Без имени',
-      customerPhone: booking.customer_phone || 'Без телефона',
-      customerEmail: booking.customer_email || '',
-      // Для совместимости с различными частями приложения
-      name: booking.customer_name || 'Без имени', // Альтернативное поле для customerName
-      phone: booking.customer_phone || 'Без телефона', // Альтернативное поле для customerPhone
-      email: booking.customer_email || '', // Альтернативное поле для customerEmail
-      
-      // Используем правильные поля даты и времени
-      date: bookingDate, // Основное поле даты
-      bookingDate: bookingDate, // Альтернативное поле для date
-      startTime: booking.start_time || '00:00',
-      endTime: booking.end_time || '00:00',
-      
-      // Данные о комнате и пакете
-      roomId: booking.room_id || 0,
-      roomName: booking.room_name || `Room ${booking.room_id || 0}`,
-      packageId: booking.package_id || 0,
-      packageName: booking.package_name || `Package ${booking.package_id || 0}`,
-      
-      // Информация о количестве людей
-      numPeople: booking.num_people || 1,
-      numberOfPeople: booking.num_people || 1, // Альтернативное поле для numPeople
-      
-      // Дополнительная информация
-      notes: booking.notes || '',
-      comment: booking.notes || '', // Альтернативное поле для notes
-      adminComment: booking.admin_comment || '',
-      promoCode: booking.promo_code || '',
-      
-      // Информация о платеже
-      totalPrice: booking.total_price || 0,
-      totalAmount: booking.total_price || 0, // Альтернативное поле для totalPrice
-      paymentStatus: (booking.payment_status?.toUpperCase() || 'UNPAID') as PaymentStatus,
-      paidAmount: booking.paid_amount || 0,
-      
-      // Статус и даты создания/обновления
-      status: booking.status || 'created',
-      createdAt: booking.created_at || new Date().toISOString(),
-      updatedAt: booking.updated_at || new Date().toISOString()
-    };
+    return daySchedule;
+  });
+  
+  return {
+    date: new Date().toISOString().split('T')[0],
+    rooms: roomSchedule
+  };
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const booking = await request.json();
     
-    console.log('API: Трансформированное бронирование:', transformedBooking);
-    
-    return NextResponse.json(transformedBooking, { status: 201 });
+    // Валидация данных бронирования (можно расширить по необходимости)
+    if (!booking.roomId || !booking.packageId || !booking.customerName) {
+        return NextResponse.json(
+        { error: 'Missing required fields: roomId, packageId, or customerName' },
+          { status: 400 }
+        );
+      }
+      
+    // Подготовка данных для вставки в БД
+      const bookingData = {
+      room_id: booking.roomId,
+      package_id: booking.packageId,
+      booking_date: booking.booking_date || booking.date,
+      start_time: booking.startTime,
+      end_time: booking.endTime,
+      customer_name: booking.customerName,
+      customer_email: booking.customerEmail || null,
+      customer_phone: booking.customerPhone || null,
+      num_people: typeof booking.numPeople === 'string' 
+        ? parseInt(booking.numPeople, 10) 
+        : booking.numPeople || 1,
+      notes: booking.notes || null,
+      promo_code: booking.promoCode || null,
+      total_price: booking.totalPrice || 0,
+      payment_status: booking.paymentStatus || 'unpaid',
+      paid_amount: booking.paidAmount || 0,
+      status: booking.status || 'confirmed',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+    // Вставка данных в базу
+      const { data, error } = await supabase
+        .from('bookings')
+      .insert(bookingData)
+        .select()
+        .single();
+      
+      if (error) {
+      console.error('Error creating booking:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+      return NextResponse.json({
+      id: data.id,
+      packageId: data.package_id,
+      roomId: data.room_id,
+      customerName: data.customer_name,
+      customerEmail: data.customer_email,
+      customerPhone: data.customer_phone,
+      date: data.booking_date,
+      startTime: data.start_time,
+      endTime: data.end_time,
+      numPeople: data.num_people,
+      notes: data.notes,
+      promoCode: data.promo_code,
+      totalPrice: data.total_price,
+      paymentStatus: data.payment_status,
+      paidAmount: data.paid_amount,
+      status: data.status,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    });
   } catch (error) {
-    console.error('API: Необработанная ошибка в POST /api/bookings:', error);
-    return NextResponse.json(
-      { error: 'Внутренняя ошибка сервера', details: error instanceof Error ? error.message : String(error) },
-      { status: 500 }
-    );
+    console.error('Unexpected error in POST /api/bookings:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 

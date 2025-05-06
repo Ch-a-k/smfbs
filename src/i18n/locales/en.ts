@@ -11,6 +11,83 @@ export const en = {
     reject: 'Reject',
     settings: 'Settings'
   },
+  booking: {
+    title: 'Book Your Session',
+    steps: {
+      date: 'Date & Time',
+      contact: 'Contact Info',
+      payment: 'Payment'
+    },
+    date: {
+      title: 'Select Date and Time',
+      selectDate: 'Select a date',
+      selectTime: 'Select a time slot',
+      noTimeSlots: 'No available time slots for this date',
+      loading: 'Loading available times...',
+      durationLabel: 'Duration:',
+      availability: {
+        available: 'Available',
+        unavailable: 'Unavailable'
+      }
+    },
+    contact: {
+      title: 'Your Contact Information',
+      name: 'Full Name',
+      namePlaceholder: 'Enter your full name',
+      email: 'Email Address',
+      emailPlaceholder: 'Enter your email address',
+      phone: 'Phone Number',
+      phonePlaceholder: 'Enter your phone number',
+      numberOfPeople: 'Number of People',
+      promoCode: 'Promo Code (optional)',
+      promoCodePlaceholder: 'Enter promo code if you have one',
+      comment: 'Additional Comments',
+      commentPlaceholder: 'Any special requests or information we should know'
+    },
+    payment: {
+      title: 'Payment Method',
+      summary: 'Booking Summary',
+      package: 'Package',
+      date: 'Date',
+      time: 'Time',
+      people: 'Number of people',
+      totalAmount: 'Total amount',
+      method: 'Choose Payment Method',
+      fullPayment: 'Full Payment',
+      fullPaymentDesc: 'Pay the full amount now to confirm your booking',
+      depositPayment: 'Deposit Only',
+      depositPaymentDesc: 'Pay a deposit now and the rest upon arrival',
+      provider: 'Secure payments processed by:'
+    },
+    calendar: {
+      monthNames: 'January_February_March_April_May_June_July_August_September_October_November_December',
+      dayNames: 'Mon_Tue_Wed_Thu_Fri_Sat_Sun',
+      today: 'Today',
+      nextMonth: 'Next month',
+      prevMonth: 'Previous month'
+    },
+    validation: {
+      dateRequired: 'Please select a date',
+      timeRequired: 'Please select a time slot',
+      nameRequired: 'Please enter your full name',
+      emailRequired: 'Please enter your email address',
+      emailInvalid: 'Please enter a valid email address',
+      phoneRequired: 'Please enter your phone number',
+      phoneInvalid: 'Please enter a valid phone number'
+    },
+    buttons: {
+      back: 'Back',
+      next: 'Next',
+      book: 'Book Now',
+      processing: 'Processing...'
+    },
+    success: {
+      message: 'Your booking has been successfully submitted! You will receive a confirmation email shortly.'
+    },
+    error: {
+      message: 'There was an error processing your booking. Please try again.'
+    }
+  },
   nav: {
     home: 'Home',
     organizeParty: 'Organize Party',
@@ -62,7 +139,7 @@ export const en = {
         easy: {
           name: 'PIECE OF CAKE',
           items: [
-            '75 glass items',
+            '25 glass items',
             '0 piece of furniture',
             '0 electronic devices'
           ],
@@ -71,27 +148,27 @@ export const en = {
         medium: {
           name: 'EASY',
           items: [
-            '75 glass items',
-            '6 pieces of furniture',
-            '9 electronic devices'
+            '25 glass items',
+            '2 pieces of furniture',
+            '3 electronic devices'
           ],
           difficulty: 'MEDIUM'
         },
         hard: {
           name: 'MEDIUM',
           items: [
-            '90 glass items',
-            '9 pieces of furniture',
-            '15 electronic devices'
+            '30 glass items',
+            '3 pieces of furniture',
+            '5 electronic devices'
           ],
           difficulty: 'HARD'
         },
         extreme: {
           name: 'HARD',
           items: [
-            '105 glass items',
-            '12 pieces of furniture',
-            '21 electronic devices'
+            '35 glass items',
+            '4 pieces of furniture',
+            '7 electronic devices'
           ],
           difficulty: 'EXTREME'
         }

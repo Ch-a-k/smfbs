@@ -27,10 +27,6 @@ export default function AdminBookingCalendar({
 }: AdminBookingCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   
-  // Проверка входных параметров
-  const safeBookings = Array.isArray(bookings) ? bookings : [];
-  const safeDate = selectedDate || format(new Date(), 'yyyy-MM-dd');
-  
   // Получаем даты текущего календаря
   const generateCalendarDates = (month: Date) => {
     const startDate = startOfMonth(month);
@@ -102,30 +98,85 @@ export default function AdminBookingCalendar({
   
   // Получаем бронирования на определенную дату
   const getBookingsForDate = (date: string) => {
-    if (!date || !safeBookings.length) {
+    if (!date || !bookings || !Array.isArray(bookings) || bookings.length === 0) {
+      console.log(`Нет данных для фильтрации на дату ${date}:`, { date, bookingsLength: bookings?.length || 0 });
       return [];
     }
     
-    // Фильтруем бронирования с учетом всех возможных форматов дат
-    return safeBookings.filter(booking => {
-      if (!booking) return false;
+    // Добавим детальный отладочный вывод для конкретной интересующей даты
+    // Польский формат даты может быть "6 maja 2025", мы ищем соответствие с "2025-05-06"
+    const isTargetDate = date === '2025-05-06';
+    if (isTargetDate) {
+      console.log('============== ДИАГНОСТИКА БРОНИРОВАНИЙ ==============');
+      console.log(`Поиск бронирований на дату: ${date}`);
+      console.log(`Всего бронирований в системе: ${bookings.length}`);
       
-      // Проверяем все возможные варианты полей даты
-      const matchesDate = booking.date === date;
-      const matchesBookingDate = booking.bookingDate === date;
+      // Проверим все даты в бронированиях
+      const dateSummary = bookings.map(booking => ({
+        id: booking.id,
+        date: booking.date,
+        bookingDate: booking.bookingDate,
+        // Используем только поля, существующие в типе Booking
+        createdAt: booking.createdAt
+      }));
+      console.log('Сводка дат во всех бронированиях:', dateSummary);
+    }
+    
+    // Преобразуем дату в альтернативные форматы для сравнения
+    // Из '2025-05-06' получаем '6 maja 2025' (польский формат)
+    const dateParts = date.split('-');
+    if (dateParts.length === 3) {
+      const year = dateParts[0];
+      const month = parseInt(dateParts[1], 10);
+      const day = parseInt(dateParts[2], 10);
       
-      // Проверяем совпадение с датой создания, если другие поля отсутствуют
-      // Преобразуем timestamp в формат YYYY-MM-DD
-      let matchesCreatedAt = false;
-      if (booking.createdAt && !matchesDate && !matchesBookingDate) {
-        const createdDate = typeof booking.createdAt === 'string' 
-          ? booking.createdAt.split('T')[0] // Извлекаем только дату из ISO строки
-          : format(booking.createdAt as Date, 'yyyy-MM-dd');
-          
-        matchesCreatedAt = createdDate === date;
+      // Преобразуем месяц в польское название
+      const polishMonths = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 
+                         'czerwca', 'lipca', 'sierpnia', 'września', 
+                         'października', 'listopada', 'grudnia'];
+      const polishMonthName = polishMonths[month - 1];
+      
+      // Сформируем польский формат даты: День Месяц Год
+      const polishDateFormat = `${day} ${polishMonthName} ${year}`;
+      
+      if (isTargetDate) {
+        console.log(`Альтернативный формат даты для поиска: ${polishDateFormat}`);
       }
       
-      return matchesDate || matchesBookingDate || matchesCreatedAt;
+      // Фильтруем бронирования, проверяя различные форматы дат
+      const filtered = bookings.filter(booking => {
+        if (!booking) return false;
+        
+        // Проверяем разные форматы и поля дат
+        const bookingDate = booking.date;
+        const bookingDateAlt = booking.bookingDate;
+        
+        // Также проверяем альтернативный польский формат
+        const matchesDate = (bookingDate && bookingDate === date);
+        const matchesAltDate = (bookingDateAlt && bookingDateAlt === date);
+        const matchesPolishFormat = (booking.date === polishDateFormat || 
+                                    booking.bookingDate === polishDateFormat);
+        
+        if (isTargetDate && (matchesDate || matchesAltDate || matchesPolishFormat)) {
+          console.log('НАЙДЕНО соответствующее бронирование:', booking);
+        }
+        
+        return matchesDate || matchesAltDate || matchesPolishFormat;
+      });
+      
+      if (isTargetDate) {
+        console.log(`Найдено ${filtered.length} бронирований на дату ${date}`);
+        console.log('============ КОНЕЦ ДИАГНОСТИКИ ============');
+      }
+      
+      return filtered;
+    }
+    
+    // Стандартная фильтрация, если дата не в формате YYYY-MM-DD
+    return bookings.filter(booking => {
+      if (!booking) return false;
+      return (booking.date && booking.date === date) || 
+             (booking.bookingDate && booking.bookingDate === date);
     });
   };
   
@@ -239,9 +290,7 @@ export default function AdminBookingCalendar({
                             'bg-red-500'
                           }`}></span>
                         </div>
-                        <span className="truncate block text-gray-400">
-                          {booking.customerName || booking.name || `Комната ${booking.roomId || 'N/A'}`}
-                        </span>
+                        <span className="truncate block text-gray-400">{booking.name}</span>
                       </button>
                     ))}
                   </div>
@@ -255,17 +304,17 @@ export default function AdminBookingCalendar({
       {/* Подробная информация о выбранном дне */}
       <div className="mt-8 bg-gray-800 rounded-lg p-6">
         <h3 className="text-lg font-medium text-white mb-4">
-          {format(parseISO(safeDate), 'd MMMM yyyy', { locale: pl })}
+          {format(parseISO(selectedDate), 'd MMMM yyyy', { locale: pl })}
         </h3>
         
-        {getBookingsForDate(safeDate).length === 0 ? (
+        {getBookingsForDate(selectedDate).length === 0 ? (
           <div className="text-center py-8 text-gray-400">
             Brak rezerwacji na ten dzień
           </div>
         ) : (
           <div className="space-y-4">
-            {getBookingsForDate(safeDate)
-              .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))
+            {getBookingsForDate(selectedDate)
+              .sort((a, b) => a.startTime.localeCompare(b.startTime))
               .map(booking => (
                 <div 
                   key={booking.id} 
@@ -284,17 +333,17 @@ export default function AdminBookingCalendar({
                       </div>
                       
                       <p className="text-sm text-gray-300 mt-1">
-                        {booking.name || booking.customerName} • {booking.email || booking.customerEmail} • {booking.phone || booking.customerPhone}
+                        {booking.name} • {booking.email} • {booking.phone}
                       </p>
                       
                       <p className="text-sm text-gray-300 mt-1">
-                        {booking.packageName} • {booking.numberOfPeople || booking.numPeople} {(booking.numberOfPeople || booking.numPeople) === 1 ? 'osoba' : 'osoby'}
+                        {booking.packageName} • {booking.numberOfPeople} {booking.numberOfPeople === 1 ? 'osoba' : 'osoby'}
                       </p>
                     </div>
                     
                     <div className="flex flex-col items-end">
                       <span className="text-lg font-bold text-white">
-                        {booking.totalAmount || booking.totalPrice} PLN
+                        {booking.totalAmount} PLN
                       </span>
                       <span className={`text-xs px-2 py-0.5 rounded-full mt-1 ${
                         booking.paymentStatus === 'FULLY_PAID' ? 'bg-green-500/20 text-green-300' :
@@ -302,8 +351,8 @@ export default function AdminBookingCalendar({
                         'bg-red-500/20 text-red-300'
                       }`}>
                         {booking.paymentStatus === 'FULLY_PAID' ? 'Opłacone w całości' :
-                        booking.paymentStatus === 'DEPOSIT_PAID' ? 'Wpłacony zadatek' :
-                        'Nieopłacone'}
+                         booking.paymentStatus === 'DEPOSIT_PAID' ? 'Wpłacony zadatek' :
+                         'Nieopłacone'}
                       </span>
                     </div>
                   </div>

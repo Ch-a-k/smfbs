@@ -15,15 +15,18 @@ import {
   Glasses,
   Wrench
 } from 'lucide-react'
-import { ReactElement, useState } from 'react'
+import { ReactElement, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { FloatingImages } from '@/components/FloatingImages'
 import { ExtraItemsSection } from '@/components/ExtraItemsSection'
+import BookingModal from './booking/BookingModal'
+import { Package as BasePackage } from '@/types/booking'
 
 // Types
 type Tool = 'ubranie' | 'kask' | 'rękawice'
 
 interface Package {
+  id?: string | number
   name: string
   items: string[]
   tools: Tool[]
@@ -172,91 +175,133 @@ function PackageInfo({ people, duration }: { people: string, duration: string })
   )
 }
 
-function PricingCard({ pkg, index }: { pkg: Package, index: number }) {
+// Компоненты с модальным окном бронирования
+interface PricingCardWithModalProps {
+  pkg: Package;
+  index: number;
+}
+
+function PricingCardWithModal({ pkg, index }: PricingCardWithModalProps) {
   const { t } = useI18n()
-  const isBestseller = pkg.name === 'ŚREDNI'
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const isBestseller = pkg.isBestseller;
+
+  // Преобразование данных пакета в формат для BookingModal
+  const packageData: BasePackage = useMemo(() => {
+    const getDuration = (durationStr: string): number => {
+      const match = durationStr.match(/\d+/);
+      return match ? parseInt(match[0], 10) : 60;
+    };
+
+    const getMaxPeople = (peopleStr: string): number => {
+      // Если строка содержит диапазон (например, "1-6"), берем максимальное значение
+      if (peopleStr.includes('-')) {
+        const match = peopleStr.match(/(\d+)-(\d+)/);
+        return match ? parseInt(match[2], 10) : 6;
+      } 
+      // Если это просто число
+      const match = peopleStr.match(/\d+/);
+      return match ? parseInt(match[0], 10) : 6;
+    };
+
+    return {
+      id: pkg.id || index + 1,
+      name: pkg.name,
+      description: '',
+      price: pkg.price,
+      depositAmount: 20, // Фиксированный депозит
+      duration: getDuration(pkg.duration),
+      maxPeople: getMaxPeople(pkg.people),
+      isBestseller: pkg.isBestseller
+    };
+  }, [pkg, index]);
 
   return (
-    <motion.div
-      {...cardAnimation(index)}
-      className={cn(
-        "relative group w-full",
-        isBestseller && "lg:scale-110 lg:-translate-y-4 z-10"
-      )}
-    >
-      {isBestseller && (
-        <div className="absolute -inset-[2px] rounded-[20px] bg-gradient-to-r from-[#f36e21] via-[#ff9f58] to-[#f36e21] animate-border-flow" />
-      )}
+    <>
+      <motion.div
+        {...cardAnimation(index)}
+        className={cn(
+          "relative group w-full",
+          isBestseller && "lg:scale-110 lg:-translate-y-4 z-10"
+        )}
+      >
+        {isBestseller && (
+          <div className="absolute -inset-[2px] rounded-[20px] bg-gradient-to-r from-[#f36e21] via-[#ff9f58] to-[#f36e21] animate-border-flow" />
+        )}
 
-      <div className={cn(
-        "relative rounded-[18px] p-6",
-        "bg-black/40 backdrop-blur-xl",
-        "border transition-all duration-300",
-        "flex flex-col h-full",
-        isBestseller 
-          ? "border-transparent shadow-xl shadow-[#f36e21]/20" 
-          : "border-white/10 hover:border-white/20"
-      )}>
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h3 className={cn(
-              "text-lg font-bold",
-              isBestseller ? "text-[#f36e21]" : "text-white"
-            )}>
-              {pkg.name}
-            </h3>
-            <div className="mt-1 text-xl font-bold text-white">
-              {pkg.price}
+        <div className={cn(
+          "relative rounded-[18px] p-6",
+          "bg-black/40 backdrop-blur-xl",
+          "border transition-all duration-300",
+          "flex flex-col h-full",
+          isBestseller 
+            ? "border-transparent shadow-xl shadow-[#f36e21]/20" 
+            : "border-white/10 hover:border-white/20"
+        )}>
+          {/* Header */}
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className={cn(
+                "text-lg font-bold",
+                isBestseller ? "text-[#f36e21]" : "text-white"
+              )}>
+                {pkg.name}
+              </h3>
+              <div className="mt-1 text-xl font-bold text-white">
+                {pkg.price}
+              </div>
             </div>
+            {isBestseller && (
+              <Badge 
+                variant="featured"
+                className="flex items-center gap-1"
+              >
+                <Sparkles className="w-3 h-3" />
+                {t('home.pricing.bestSeller')}
+              </Badge>
+            )}
           </div>
-          {isBestseller && (
-            <Badge 
-              variant="featured"
-              className="flex items-center gap-1"
-            >
-              <Sparkles className="w-3 h-3" />
-              {t('home.pricing.bestSeller')}
-            </Badge>
-          )}
-        </div>
 
-        {/* Content */}
-        <div className="flex-1 pt-4 space-y-4">
-          <PackageItems items={pkg.items} isBestseller={isBestseller} />
-          <PackageTools tools={pkg.tools} isBestseller={isBestseller} />
-          <PackageInfo people={pkg.people} duration={pkg.duration} />
-        </div>
+          {/* Content */}
+          <div className="flex-1 pt-4 space-y-4">
+            <PackageItems items={pkg.items} isBestseller={isBestseller} />
+            <PackageTools tools={pkg.tools} isBestseller={isBestseller} />
+            <PackageInfo people={pkg.people} duration={pkg.duration} />
+          </div>
 
-        {/* Button */}
-        <Link 
-          href={pkg.bookingUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={cn(
-            "block w-full py-3 px-4 rounded-lg text-center mt-6",
-            "font-medium text-sm",
-            "transform transition-all duration-200",
-            "hover:scale-102 active:scale-98",
-            isBestseller
-              ? "bg-[#f36e21] text-white hover:bg-[#f36e21]/90 shadow-lg shadow-[#f36e21]/20"
-              : "bg-white/10 text-white hover:bg-white/20"
-          )}
-        >
-          {t('home.pricing.bookNow')}
-        </Link>
-      </div>
-    </motion.div>
-  )
+          {/* Button */}
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className={cn(
+              "block w-full py-3 px-4 rounded-lg text-center mt-6",
+              "font-medium text-sm",
+              "transform transition-all duration-200",
+              "hover:scale-102 active:scale-98",
+              isBestseller
+                ? "bg-[#f36e21] text-white hover:bg-[#f36e21]/90 shadow-lg shadow-[#f36e21]/20"
+                : "bg-white/10 text-white hover:bg-white/20"
+            )}
+          >
+            {t('home.pricing.bookNow')}
+          </button>
+        </div>
+      </motion.div>
+
+      <BookingModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        packageData={packageData}
+      />
+    </>
+  );
 }
 
 export function PricingSection() {
   const { t } = useI18n()
 
   const packages: Package[] = [
-    
-    
-        {
+    {
+      id: 'extreme',
       name: 'TRUDNY',
       items: t('home.pricing.packages.extreme.items', { returnObjects: true }) as string[],
       tools: ['ubranie', 'kask', 'rękawice'],
@@ -267,6 +312,7 @@ export function PricingSection() {
       bookingUrl: 'https://smashandfun.simplybook.it/v2/#book/service/5/count/1/',
     },
     {
+      id: 'hard',
       name: 'ŚREDNI',
       items: t('home.pricing.packages.hard.items', { returnObjects: true }) as string[],
       tools: ['ubranie', 'kask', 'rękawice'],
@@ -278,6 +324,7 @@ export function PricingSection() {
       isBestseller: true
     },
     {
+      id: 'medium',
       name: 'ŁATWY',
       items: t('home.pricing.packages.medium.items', { returnObjects: true }) as string[],
       tools: ['ubranie', 'kask', 'rękawice'],
@@ -288,6 +335,7 @@ export function PricingSection() {
       bookingUrl: 'https://smashandfun.simplybook.it/v2/#book/service/3/count/1/',
     },
     {
+      id: 'easy',
       name: 'BUŁKA Z MASŁEM',
       items: t('home.pricing.packages.easy.items', { returnObjects: true }) as string[],
       tools: ['ubranie', 'kask', 'rękawice'],
@@ -314,7 +362,7 @@ export function PricingSection() {
         <SectionTitle title={t('home.pricing.title')} />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {packages.map((pkg, index) => (
-            <PricingCard key={pkg.name} pkg={pkg} index={index} />
+            <PricingCardWithModal key={pkg.id || pkg.name} pkg={pkg} index={index} />
           ))}
         </div>
       </div>
