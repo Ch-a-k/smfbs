@@ -144,11 +144,11 @@ export default function AdminBookingDetails({
                   </tr>
                   <tr>
                     <td className="py-2 text-gray-400">Пакет</td>
-                    <td className="py-2 text-white font-medium">{booking.packageName}</td>
+                    <td className="py-2 text-white font-medium">{booking.packageName || `Пакет ${booking.packageId}`}</td>
                   </tr>
                   <tr>
                     <td className="py-2 text-gray-400">Комната</td>
-                    <td className="py-2 text-white font-medium">{booking.roomId}</td>
+                    <td className="py-2 text-white font-medium">{booking.roomName || `Комната ${booking.roomId}`}</td>
                   </tr>
                 </tbody>
               </table>
@@ -160,19 +160,19 @@ export default function AdminBookingDetails({
                 <tbody className="divide-y divide-gray-700">
                   <tr>
                     <td className="py-2 text-gray-400">Имя</td>
-                    <td className="py-2 text-white font-medium">{booking.name}</td>
+                    <td className="py-2 text-white font-medium">{booking.customerName || booking.name}</td>
                   </tr>
                   <tr>
                     <td className="py-2 text-gray-400">Email</td>
-                    <td className="py-2 text-white font-medium">{booking.email}</td>
+                    <td className="py-2 text-white font-medium">{booking.customerEmail || booking.email}</td>
                   </tr>
                   <tr>
                     <td className="py-2 text-gray-400">Телефон</td>
-                    <td className="py-2 text-white font-medium">{booking.phone}</td>
+                    <td className="py-2 text-white font-medium">{booking.customerPhone || booking.phone}</td>
                   </tr>
                   <tr>
                     <td className="py-2 text-gray-400">Кол-во человек</td>
-                    <td className="py-2 text-white font-medium">{booking.numberOfPeople}</td>
+                    <td className="py-2 text-white font-medium">{booking.numberOfPeople || booking.numPeople}</td>
                   </tr>
                   <tr>
                     <td className="py-2 text-gray-400">Промокод</td>
@@ -184,11 +184,11 @@ export default function AdminBookingDetails({
           </div>
           
           {/* Комментарий клиента */}
-          {booking.comment && (
+          {(booking.comment || booking.notes) && (
             <div>
               <h3 className="text-lg font-medium text-white mb-2">Комментарий клиента</h3>
               <div className="bg-gray-700 p-3 rounded-md text-white">
-                {booking.comment}
+                {booking.comment || booking.notes}
               </div>
             </div>
           )}
@@ -220,7 +220,7 @@ export default function AdminBookingDetails({
             <div className="bg-gray-700 p-4 rounded-md">
               <div className="flex justify-between mb-2">
                 <span className="text-gray-400">Всего:</span>
-                <span className="text-white font-medium">{booking.totalAmount} PLN</span>
+                <span className="text-white font-medium">{booking.totalAmount || booking.totalPrice} PLN</span>
               </div>
               <div className="flex justify-between mb-4">
                 <span className="text-gray-400">Оплачено:</span>

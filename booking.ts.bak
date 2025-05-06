@@ -90,7 +90,6 @@ export interface Booking {
   numberOfPeople?: number; // Альтернативное поле для количества людей
   notes: string;
   comment?: string; // Альтернативное поле для комментариев
-  adminComment?: string; // Комментарий администратора
   promoCode: string;
   totalPrice: number;
   totalAmount?: number; // Альтернативное поле для суммы
@@ -98,7 +97,7 @@ export interface Booking {
   paidAmount: number;
   depositAmount?: number;
   status: string;
-  createdAt: string | Date; // Дата создания бронирования - может быть строкой или объектом Date
+  createdAt: string;
   updatedAt: string;
   // Добавляем поля для совместимости с различными частями приложения
   name?: string; // Альтернативное поле для customerName
@@ -156,90 +155,36 @@ export function mapDatabasePackageToPackage(dbPackage: any): Package {
  * Функция для преобразования данных из базы данных в формат объекта Booking
  */
 export function mapDatabaseBookingToBooking(dbBooking: any): Booking {
-  // Проверка на корректность входных данных
-  if (!dbBooking) {
-    console.error('mapDatabaseBookingToBooking: получены пустые данные бронирования');
-    // Возвращаем заполненный по умолчанию объект
-    return {
-      id: 0,
-      packageId: 0,
-      packageName: '',
-      roomId: 0,
-      roomName: '',
-      customerName: '',
-      customerEmail: '',
-      customerPhone: '',
-      date: '',
-      startTime: '',
-      endTime: '',
-      numPeople: 0,
-      notes: '',
-      promoCode: '',
-      totalPrice: 0,
-      paymentStatus: 'UNPAID',
-      paidAmount: 0,
-      status: '',
-      createdAt: '',
-      updatedAt: ''
-    };
-  }
-
-  // Дата бронирования (приоритет booking_date, затем date, затем created_at)
-  const bookingDate = dbBooking.booking_date || dbBooking.date || 
-    (dbBooking.created_at ? dbBooking.created_at.split('T')[0] : '');
-
-  // Имя клиента (приоритет customer_name, затем name)
-  const customerName = dbBooking.customer_name || dbBooking.name || '';
-  
-  // Email клиента (приоритет customer_email, затем email)
-  const customerEmail = dbBooking.customer_email || dbBooking.email || '';
-  
-  // Телефон клиента (приоритет customer_phone, затем phone)
-  const customerPhone = dbBooking.customer_phone || dbBooking.phone || '';
-  
-  // Количество людей (приоритет num_people, затем numberOfPeople)
-  const numPeople = dbBooking.num_people || dbBooking.numberOfPeople || 1;
-  
-  // Комментарий (приоритет notes, затем comment)
-  const notes = dbBooking.notes || dbBooking.comment || '';
-  
-  // Общая цена (приоритет total_price, затем totalAmount)
-  const totalPrice = dbBooking.total_price || dbBooking.totalAmount || 0;
-  
-  // Статус оплаты
-  const paymentStatus = dbBooking.payment_status || 'UNPAID';
-  
-  // Результат маппинга
   return {
-    id: dbBooking.id || 0,
-    packageId: dbBooking.package_id || 0,
-    packageName: dbBooking.package_name || dbBooking.packages?.name || '',
-    roomId: dbBooking.room_id || 0,
-    roomName: dbBooking.room_name || dbBooking.rooms?.name || '',
-    customerName,
-    customerEmail,
-    customerPhone,
-    date: bookingDate,
-    bookingDate: dbBooking.booking_date || '',
-    dateDisplay: dbBooking.date_display || '',
+    id: dbBooking.id,
+    packageId: dbBooking.package_id,
+    packageName: dbBooking.package_name || '',
+    roomId: dbBooking.room_id,
+    roomName: dbBooking.room_name || '',
+    customerName: dbBooking.customer_name || dbBooking.name || '',
+    customerEmail: dbBooking.customer_email || dbBooking.email || '',
+    customerPhone: dbBooking.customer_phone || dbBooking.phone || '',
+    date: dbBooking.booking_date || dbBooking.date || dbBooking.created_at,
+    bookingDate: dbBooking.booking_date,
+    dateDisplay: dbBooking.date_display,
     startTime: dbBooking.start_time || '',
     endTime: dbBooking.end_time || '',
-    numPeople,
-    numberOfPeople: numPeople,
-    notes,
-    comment: notes,
-    adminComment: dbBooking.admin_comment || '',
+    numPeople: dbBooking.num_people || dbBooking.numberOfPeople || 1,
+    numberOfPeople: dbBooking.num_people || dbBooking.numberOfPeople || 1,
+    notes: dbBooking.notes || '',
+    comment: dbBooking.notes || dbBooking.comment || '',
     promoCode: dbBooking.promo_code || '',
-    totalPrice,
-    totalAmount: totalPrice,
-    paymentStatus,
+    totalPrice: dbBooking.total_price || dbBooking.totalAmount || 0,
+    totalAmount: dbBooking.total_price || dbBooking.totalAmount || 0,
+    paymentStatus: (dbBooking.payment_status as PaymentStatus) || 'UNPAID',
     paidAmount: dbBooking.paid_amount || 0,
     depositAmount: dbBooking.deposit_amount || 0,
     status: dbBooking.status || '',
     createdAt: dbBooking.created_at || '',
     updatedAt: dbBooking.updated_at || dbBooking.created_at || '',
-    name: customerName,
-    email: customerEmail,
-    phone: customerPhone
+    // Альтернативные имена полей для совместимости
+    name: dbBooking.customer_name || dbBooking.name || '',
+    email: dbBooking.customer_email || dbBooking.email || '',
+    phone: dbBooking.customer_phone || dbBooking.phone || ''
   };
 }

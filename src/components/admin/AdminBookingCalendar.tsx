@@ -27,6 +27,10 @@ export default function AdminBookingCalendar({
 }: AdminBookingCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   
+  // Проверка входных параметров
+  const safeBookings = Array.isArray(bookings) ? bookings : [];
+  const safeDate = selectedDate || format(new Date(), 'yyyy-MM-dd');
+  
   // Получаем даты текущего календаря
   const generateCalendarDates = (month: Date) => {
     const startDate = startOfMonth(month);
@@ -98,7 +102,31 @@ export default function AdminBookingCalendar({
   
   // Получаем бронирования на определенную дату
   const getBookingsForDate = (date: string) => {
-    return bookings.filter(booking => booking.date === date);
+    if (!date || !safeBookings.length) {
+      return [];
+    }
+    
+    // Фильтруем бронирования с учетом всех возможных форматов дат
+    return safeBookings.filter(booking => {
+      if (!booking) return false;
+      
+      // Проверяем все возможные варианты полей даты
+      const matchesDate = booking.date === date;
+      const matchesBookingDate = booking.bookingDate === date;
+      
+      // Проверяем совпадение с датой создания, если другие поля отсутствуют
+      // Преобразуем timestamp в формат YYYY-MM-DD
+      let matchesCreatedAt = false;
+      if (booking.createdAt && !matchesDate && !matchesBookingDate) {
+        const createdDate = typeof booking.createdAt === 'string' 
+          ? booking.createdAt.split('T')[0] // Извлекаем только дату из ISO строки
+          : format(booking.createdAt as Date, 'yyyy-MM-dd');
+          
+        matchesCreatedAt = createdDate === date;
+      }
+      
+      return matchesDate || matchesBookingDate || matchesCreatedAt;
+    });
   };
   
   // Проверяем, есть ли на эту дату бронирования
@@ -211,7 +239,9 @@ export default function AdminBookingCalendar({
                             'bg-red-500'
                           }`}></span>
                         </div>
-                        <span className="truncate block text-gray-400">{booking.name}</span>
+                        <span className="truncate block text-gray-400">
+                          {booking.customerName || booking.name || `Комната ${booking.roomId || 'N/A'}`}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -225,17 +255,17 @@ export default function AdminBookingCalendar({
       {/* Подробная информация о выбранном дне */}
       <div className="mt-8 bg-gray-800 rounded-lg p-6">
         <h3 className="text-lg font-medium text-white mb-4">
-          {format(parseISO(selectedDate), 'd MMMM yyyy', { locale: pl })}
+          {format(parseISO(safeDate), 'd MMMM yyyy', { locale: pl })}
         </h3>
         
-        {getBookingsForDate(selectedDate).length === 0 ? (
+        {getBookingsForDate(safeDate).length === 0 ? (
           <div className="text-center py-8 text-gray-400">
             Brak rezerwacji na ten dzień
           </div>
         ) : (
           <div className="space-y-4">
-            {getBookingsForDate(selectedDate)
-              .sort((a, b) => a.startTime.localeCompare(b.startTime))
+            {getBookingsForDate(safeDate)
+              .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))
               .map(booking => (
                 <div 
                   key={booking.id} 
@@ -254,17 +284,17 @@ export default function AdminBookingCalendar({
                       </div>
                       
                       <p className="text-sm text-gray-300 mt-1">
-                        {booking.name} • {booking.email} • {booking.phone}
+                        {booking.name || booking.customerName} • {booking.email || booking.customerEmail} • {booking.phone || booking.customerPhone}
                       </p>
                       
                       <p className="text-sm text-gray-300 mt-1">
-                        {booking.packageName} • {booking.numberOfPeople} {booking.numberOfPeople === 1 ? 'osoba' : 'osoby'}
+                        {booking.packageName} • {booking.numberOfPeople || booking.numPeople} {(booking.numberOfPeople || booking.numPeople) === 1 ? 'osoba' : 'osoby'}
                       </p>
                     </div>
                     
                     <div className="flex flex-col items-end">
                       <span className="text-lg font-bold text-white">
-                        {booking.totalAmount} PLN
+                        {booking.totalAmount || booking.totalPrice} PLN
                       </span>
                       <span className={`text-xs px-2 py-0.5 rounded-full mt-1 ${
                         booking.paymentStatus === 'FULLY_PAID' ? 'bg-green-500/20 text-green-300' :
@@ -272,8 +302,8 @@ export default function AdminBookingCalendar({
                         'bg-red-500/20 text-red-300'
                       }`}>
                         {booking.paymentStatus === 'FULLY_PAID' ? 'Opłacone w całości' :
-                         booking.paymentStatus === 'DEPOSIT_PAID' ? 'Wpłacony zadatek' :
-                         'Nieopłacone'}
+                        booking.paymentStatus === 'DEPOSIT_PAID' ? 'Wpłacony zadatek' :
+                        'Nieopłacone'}
                       </span>
                     </div>
                   </div>

@@ -13,6 +13,14 @@ import Link from 'next/link';
 // Типы для вкладок администратора
 type AdminTab = 'calendar' | 'list' | 'analytics' | 'create';
 
+// Расширение интерфейса Booking для обработки данных API
+// Здесь мы указываем дополнительные поля, которые могут прийти от API,
+// но они все уже есть в Booking, просто с более строгими типами
+interface ApiBooking extends Omit<Booking, 'createdAt'> {
+  bookingDate?: string;
+  createdAt?: string | Date; // В API может быть undefined
+}
+
 export default function AdminBookingsPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('calendar');
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -21,27 +29,97 @@ export default function AdminBookingsPage() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showBookingDetails, setShowBookingDetails] = useState(false);
   
-  // Загрузка бронирований
-  useEffect(() => {
-    fetchBookings();
-  }, []);
-  
-  // Функция загрузки бронирований
+  // Загрузка бронирований при монтировании компонента
   const fetchBookings = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/bookings');
-      if (!response.ok) {
-        throw new Error('Failed to fetch bookings');
+      console.log('Начинаем загрузку бронирований...');
+      const res = await fetch('/api/bookings');
+      
+      if (!res.ok) {
+        throw new Error(`Ошибка загрузки: ${res.status} ${res.statusText}`);
       }
-      const data = await response.json();
-      setBookings(data);
+      
+      // Получаем данные из ответа
+      const data = await res.json();
+      console.log('Получены данные бронирований:', data);
+      
+      // Проверка структуры ответа API - ожидаем массив бронирований
+      if (Array.isArray(data)) {
+        // Теперь API возвращает массив напрямую
+        const bookingsArray = data || [];
+        console.log(`Получен массив из ${bookingsArray.length} бронирований`);
+        
+        // Подготовка данных для календаря
+        const transformedBookings = bookingsArray.map((booking: ApiBooking) => {
+          if (!booking) return booking;
+          
+          const updatedBooking: ApiBooking = { ...booking };
+          
+          // Убеждаемся, что у каждого бронирования есть поле date
+          if (!updatedBooking.date && updatedBooking.bookingDate) {
+            updatedBooking.date = updatedBooking.bookingDate;
+          } else if (!updatedBooking.date && updatedBooking.createdAt) {
+            const createdAt = updatedBooking.createdAt;
+            if (typeof createdAt === 'string') {
+              updatedBooking.date = createdAt.split('T')[0];
+            } else if (createdAt instanceof Date) {
+              updatedBooking.date = format(createdAt, 'yyyy-MM-dd');
+            }
+          }
+          
+          return updatedBooking;
+        }).filter(Boolean) as Booking[]; // Фильтруем undefined и null значения
+        
+        console.log(`Обработано ${transformedBookings.length} бронирований:`, 
+          transformedBookings.length > 0 ? transformedBookings[0] : 'нет бронирований');
+          
+        setBookings(transformedBookings);
+      } else if (data && data.bookings && Array.isArray(data.bookings)) {
+        // Для обратной совместимости - если API вернул старый формат
+        const bookingsArray = data.bookings || [];
+        console.log(`Получен массив из объекта bookings: ${bookingsArray.length} бронирований`);
+        
+        // Формат ответа был изменен, но на всякий случай оставляем обработку старого формата
+        const transformedBookings = bookingsArray
+          .map((booking: ApiBooking) => {
+            if (!booking) return booking;
+            
+            const updatedBooking: ApiBooking = { ...booking };
+            
+            // Убеждаемся, что у каждого бронирования есть поле date
+            if (!updatedBooking.date && updatedBooking.bookingDate) {
+              updatedBooking.date = updatedBooking.bookingDate;
+            } else if (!updatedBooking.date && updatedBooking.createdAt) {
+              const createdAt = updatedBooking.createdAt;
+              if (typeof createdAt === 'string') {
+                updatedBooking.date = createdAt.split('T')[0];
+              } else if (createdAt instanceof Date) {
+                updatedBooking.date = format(createdAt, 'yyyy-MM-dd');
+              }
+            }
+            
+            return updatedBooking;
+          })
+          .filter(Boolean) as Booking[];
+          
+        setBookings(transformedBookings);
+      } else {
+        console.error('Неверный формат данных бронирований:', data);
+        setBookings([]);
+      }
     } catch (error) {
-      console.error('Error loading bookings:', error);
+      console.error('Ошибка при загрузке бронирований:', error);
+      setBookings([]);
     } finally {
       setIsLoading(false);
     }
   };
+  
+  // Загрузка бронирований при монтировании компонента
+  useEffect(() => {
+    fetchBookings();
+  }, []);
   
   // Обработчик просмотра деталей бронирования
   const handleViewBooking = (booking: Booking) => {
@@ -57,6 +135,16 @@ export default function AdminBookingsPage() {
       // Формируем данные для отправки
       const bookingToCreate = {
         ...bookingData,
+        // Добавляем маппинг полей name -> customerName, email -> customerEmail, phone -> customerPhone
+        customerName: bookingData.name,
+        customerEmail: bookingData.email,
+        customerPhone: bookingData.phone,
+        // Преобразуем numPeople и numberOfPeople
+        numPeople: bookingData.numberOfPeople,
+        // Преобразуем totalAmount в totalPrice
+        totalPrice: bookingData.totalAmount,
+        // Используем поле booking_date для даты бронирования
+        booking_date: bookingData.date,
         // Убедимся, что все числовые поля действительно числа
         roomId: typeof bookingData.roomId === 'string' ? parseInt(bookingData.roomId, 10) : bookingData.roomId,
         numberOfPeople: typeof bookingData.numberOfPeople === 'string' 
@@ -222,37 +310,37 @@ export default function AdminBookingsPage() {
     }
   };
   
-  // Рендер вкладки календаря
-  const renderCalendarTab = () => {
-    if (isLoading) {
-      return (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f36e21]"></div>
-        </div>
-      );
+  // Передача пропсов в компоненты табов
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'calendar':
+        // Проверяем наличие данных для отображения в календаре
+        return (
+          <AdminBookingCalendar 
+            bookings={bookings}
+            selectedDate={selectedDate}
+            onDateSelect={handleDateSelect}
+            onViewBooking={handleViewBooking}
+          />
+        );
+      case 'list':
+        return (
+          <AdminBookingManager
+            bookings={bookings}
+            selectedDate={selectedDate}
+            onViewBooking={handleViewBooking}
+            onDateSelect={(date) => date ? setSelectedDate(date) : setSelectedDate(format(new Date(), 'yyyy-MM-dd'))}
+            isLoading={isLoading}
+          />
+        );
+      default:
+        return null;
     }
-    
-    return (
-      <AdminBookingCalendar
-        bookings={bookings}
-        selectedDate={selectedDate}
-        onDateSelect={setSelectedDate}
-        onViewBooking={handleViewBooking}
-      />
-    );
   };
-  
-  // Рендер вкладки списка бронирований
-  const renderListTab = () => {
-    return (
-      <AdminBookingManager
-        bookings={bookings}
-        selectedDate={selectedDate}
-        onViewBooking={handleViewBooking}
-        onDateSelect={(date) => date ? setSelectedDate(date) : setSelectedDate(format(new Date(), 'yyyy-MM-dd'))}
-        isLoading={isLoading}
-      />
-    );
+
+  // Обработчик изменения выбранной даты в календаре
+  const handleDateSelect = (date: string) => {
+    setSelectedDate(date);
   };
   
   // Рендер вкладки аналитики
@@ -276,10 +364,14 @@ export default function AdminBookingsPage() {
     
     // Доход за текущий и прошлый месяцы
     const currentMonthRevenue = currentMonthBookings.reduce((sum, booking) => 
-      sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount : booking.paidAmount), 0);
-      
+      sum + (booking.paymentStatus === 'FULLY_PAID' 
+        ? (booking.totalAmount || booking.totalPrice || 0) 
+        : (booking.paidAmount || 0)), 0);
+        
     const previousMonthRevenue = previousMonthBookings.reduce((sum, booking) => 
-      sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount : booking.paidAmount), 0);
+      sum + (booking.paymentStatus === 'FULLY_PAID' 
+        ? (booking.totalAmount || booking.totalPrice || 0) 
+        : (booking.paidAmount || 0)), 0);
     
     // Статистика по комнатам
     const roomStats = [1, 2, 3, 4].map(roomId => {
@@ -288,21 +380,25 @@ export default function AdminBookingsPage() {
         roomId,
         bookingsCount: roomBookings.length,
         revenue: roomBookings.reduce((sum, booking) => 
-          sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount : booking.paidAmount), 0)
+          sum + (booking.paymentStatus === 'FULLY_PAID' 
+            ? (booking.totalAmount || booking.totalPrice || 0) 
+            : (booking.paidAmount || 0)), 0)
       };
     });
     
     // Статистика по пакетам
     const packageIds = [...new Set(bookings.map(booking => booking.packageId))];
     const packageStats = packageIds.map(packageId => {
-      const packageName = bookings.find(b => b.packageId === packageId)?.packageName || packageId;
+      const packageName = bookings.find(b => b.packageId === packageId)?.packageName || packageId.toString();
       const packageBookings = currentMonthBookings.filter(booking => booking.packageId === packageId);
       return {
         packageId,
         packageName,
         bookingsCount: packageBookings.length,
         revenue: packageBookings.reduce((sum, booking) => 
-          sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount : booking.paidAmount), 0)
+          sum + (booking.paymentStatus === 'FULLY_PAID' 
+            ? (booking.totalAmount || booking.totalPrice || 0) 
+            : (booking.paidAmount || 0)), 0)
       };
     });
     
@@ -449,9 +545,7 @@ export default function AdminBookingsPage() {
       </div>
       
       {/* Содержимое активной вкладки */}
-      {activeTab === 'calendar' && renderCalendarTab()}
-      {activeTab === 'list' && renderListTab()}
-      {activeTab === 'analytics' && renderAnalyticsTab()}
+      {renderTabContent()}
       {activeTab === 'create' && (
         <AdminCreateBooking 
           onBookingCreate={handleBookingCreate}

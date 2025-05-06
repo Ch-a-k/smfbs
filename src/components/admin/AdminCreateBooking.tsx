@@ -318,8 +318,14 @@ export default function AdminCreateBooking({ onBookingCreate, onClose }: AdminCr
       // Подготовка данных для отправки
       const bookingData: BookingFormData = {
         ...formData,
+        // Добавляем альтернативные имена полей для API
+        customerName: formData.name,
+        customerEmail: formData.email,
+        customerPhone: formData.phone,
+        numPeople: formData.numberOfPeople,
         packageName: selectedPackage.name,
         totalAmount: selectedPackage.price,
+        totalPrice: selectedPackage.price, // Добавляем totalPrice для API
         depositAmount: selectedPackage.depositAmount,
         paidAmount: paymentStatus === 'FULLY_PAID' ? selectedPackage.price : 
                    paymentStatus === 'DEPOSIT_PAID' ? selectedPackage.depositAmount : 0,
@@ -524,5 +530,530 @@ export default function AdminCreateBooking({ onBookingCreate, onClose }: AdminCr
     }
   };
   
-  
+  return (
+    <div className="bg-gray-800 rounded-lg p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-semibold text-white">Dodaj nową rezerwację</h2>
+        {onClose && (
+          <button 
+            onClick={handleClose}
+            className="text-gray-400 hover:text-white"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      
+      {/* Форма бронирования */}
+      {isLoading ? (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f36e21]"></div>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {errorMessage && (
+            <div className="bg-red-900/50 border border-red-500 text-red-200 p-4 rounded-md">
+              {errorMessage}
+            </div>
+          )}
+          
+          {/* Выбор пакета */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium text-white">Wybierz pakiet</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {packages.map(pkg => (
+                <div
+                  key={pkg.id}
+                  onClick={() => handlePackageChange(pkg.id.toString())}
+                  className={`
+                    bg-gray-700 border rounded-lg p-4 cursor-pointer transition-all
+                    ${formData.packageId === pkg.id.toString() ? 'border-[#f36e21]' : 'border-gray-600 hover:border-gray-500'}
+                  `}
+                >
+                  <h4 className="text-lg font-bold text-white">{pkg.name}</h4>
+                  <p className="text-gray-300 text-sm mb-2">{pkg.description}</p>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xl font-bold text-[#f36e21]">{pkg.price} zł</span>
+                    <span className="text-sm text-gray-400">{pkg.duration} min</span>
+                  </div>
+                </div>
+              ))}
+              
+              {packages.length === 0 && (
+                <div className="col-span-3 text-center py-8 text-gray-400">
+                  Brak dostępnych pakietów
+                </div>
+              )}
+              
+              <button
+                type="button"
+                onClick={() => setShowCreatePackageForm(true)}
+                className="bg-gray-700 border border-dashed border-gray-500 rounded-lg p-4 text-center hover:bg-gray-600 transition-all flex flex-col items-center justify-center"
+              >
+                <span className="text-3xl text-gray-400 mb-2">+</span>
+                <span className="text-gray-300">Dodaj nowy pakiet</span>
+              </button>
+            </div>
+          </div>
+          
+          {/* Выбор даты и времени */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium text-white">Data i czas</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="date" className="block text-gray-300 mb-1">
+                    Data
+                  </label>
+                  <input
+                    type="date"
+                    id="date"
+                    name="date"
+                    value={formData.date}
+                    onChange={handleInputChange}
+                    className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="startTime" className="block text-gray-300 mb-1">
+                      Czas rozpoczęcia
+                    </label>
+                    <input
+                      type="time"
+                      id="startTime"
+                      name="startTime"
+                      value={formData.startTime}
+                      onChange={handleInputChange}
+                      className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="endTime" className="block text-gray-300 mb-1">
+                      Czas zakończenia
+                    </label>
+                    <input
+                      type="time"
+                      id="endTime"
+                      name="endTime"
+                      value={formData.endTime}
+                      onChange={handleInputChange}
+                      className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                      readOnly
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label htmlFor="numberOfPeople" className="block text-gray-300 mb-1">
+                    Liczba osób
+                  </label>
+                  <input
+                    type="number"
+                    id="numberOfPeople"
+                    name="numberOfPeople"
+                    value={formData.numberOfPeople}
+                    onChange={handleInputChange}
+                    min="1"
+                    max={selectedPackage?.maxPeople || 10}
+                    className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            {/* Выбор комнаты */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium text-white">Wybierz pokój</h3>
+              
+              {isCheckingAvailability ? (
+                <div className="flex justify-center items-center h-32">
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#f36e21]"></div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    {availableRooms.map(room => (
+                      <button
+                        key={room.id}
+                        type="button"
+                        onClick={() => handleRoomSelect(room)}
+                        className={getRoomButtonClass(room)}
+                      >
+                        <div className="font-medium">{room.name}</div>
+                        <div className="text-sm">Pojemność: {room.capacity}</div>
+                      </button>
+                    ))}
+                    
+                    {availableRooms.length === 0 && (
+                      <div className="col-span-2 text-center py-8 text-gray-400">
+                        Brak dostępnych pokojów
+                      </div>
+                    )}
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateRoomForm(true)}
+                    className="w-full bg-gray-700 border border-dashed border-gray-500 rounded-lg p-3 text-center hover:bg-gray-600 transition-all"
+                  >
+                    <span className="text-gray-300">+ Dodaj nowy pokój</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+          
+          {/* Данные клиента */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium text-white">Dane klienta</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="name" className="block text-gray-300 mb-1">
+                  Imię i nazwisko
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  placeholder="Jan Kowalski"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="email" className="block text-gray-300 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  placeholder="jan@example.com"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="phone" className="block text-gray-300 mb-1">
+                  Telefon
+                </label>
+                <input
+                  type="tel"
+                  id="phone"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  placeholder="+48 123 456 789"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="promoCode" className="block text-gray-300 mb-1">
+                  Kod promocyjny
+                </label>
+                <input
+                  type="text"
+                  id="promoCode"
+                  name="promoCode"
+                  value={formData.promoCode}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  placeholder="PROMO123"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label htmlFor="comment" className="block text-gray-300 mb-1">
+                Komentarz
+              </label>
+              <textarea
+                id="comment"
+                name="comment"
+                value={formData.comment}
+                onChange={handleInputChange}
+                rows={3}
+                className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                placeholder="Dodatkowe informacje..."
+              />
+            </div>
+          </div>
+          
+          {/* Статус оплаты */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium text-white">Status płatności</h3>
+            
+            <div className="flex space-x-4">
+              <button
+                type="button"
+                onClick={() => setPaymentStatus('UNPAID')}
+                className={getPaymentStatusClass('UNPAID')}
+              >
+                Nieopłacone
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setPaymentStatus('DEPOSIT_PAID')}
+                className={getPaymentStatusClass('DEPOSIT_PAID')}
+              >
+                Zaliczka
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setPaymentStatus('FULLY_PAID')}
+                className={getPaymentStatusClass('FULLY_PAID')}
+              >
+                Opłacone
+              </button>
+            </div>
+          </div>
+          
+          {/* Действия */}
+          <div className="flex justify-end space-x-4 pt-4">
+            {onClose && (
+              <button
+                type="button"
+                onClick={handleClose}
+                className="px-4 py-2 border border-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+              >
+                Anuluj
+              </button>
+            )}
+            
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className={`px-6 py-2 bg-[#f36e21] text-white font-bold rounded-md hover:bg-[#ff7b2e] transition-colors ${
+                isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
+              }`}
+            >
+              {isSubmitting ? 'Zapisywanie...' : 'Zapisz rezerwację'}
+            </button>
+          </div>
+        </form>
+      )}
+      
+      {/* Модальное окно создания комнаты */}
+      {showCreateRoomForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-lg">
+            <h3 className="text-lg font-medium text-white mb-4">Dodaj nowy pokój</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="roomName" className="block text-gray-300 mb-1">
+                  Nazwa pokoju
+                </label>
+                <input
+                  type="text"
+                  id="roomName"
+                  name="name"
+                  value={newRoomData.name}
+                  onChange={handleNewRoomChange}
+                  className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  placeholder="Pokój 1"
+                  required
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="roomCapacity" className="block text-gray-300 mb-1">
+                    Pojemność
+                  </label>
+                  <input
+                    type="number"
+                    id="roomCapacity"
+                    name="capacity"
+                    value={newRoomData.capacity}
+                    onChange={handleNewRoomChange}
+                    min="1"
+                    className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="roomMaxPeople" className="block text-gray-300 mb-1">
+                    Maks. liczba osób
+                  </label>
+                  <input
+                    type="number"
+                    id="roomMaxPeople"
+                    name="maxPeople"
+                    value={newRoomData.maxPeople}
+                    onChange={handleNewRoomChange}
+                    min="1"
+                    className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-4 mt-6">
+              <button
+                type="button"
+                onClick={() => setShowCreateRoomForm(false)}
+                className="px-4 py-2 border border-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+              >
+                Anuluj
+              </button>
+              
+              <button
+                type="button"
+                onClick={createRoom}
+                disabled={isCreatingRoom}
+                className={`px-6 py-2 bg-[#f36e21] text-white font-bold rounded-md hover:bg-[#ff7b2e] transition-colors ${
+                  isCreatingRoom ? 'opacity-70 cursor-not-allowed' : ''
+                }`}
+              >
+                {isCreatingRoom ? 'Tworzenie...' : 'Dodaj pokój'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Модальное окно создания пакета */}
+      {showCreatePackageForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-lg">
+            <h3 className="text-lg font-medium text-white mb-4">Dodaj nowy pakiet</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="packageName" className="block text-gray-300 mb-1">
+                  Nazwa pakietu
+                </label>
+                <input
+                  type="text"
+                  id="packageName"
+                  name="name"
+                  value={newPackageData.name}
+                  onChange={handleNewPackageChange}
+                  className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  placeholder="Pakiet Standard"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="packageDescription" className="block text-gray-300 mb-1">
+                  Opis
+                </label>
+                <textarea
+                  id="packageDescription"
+                  name="description"
+                  value={newPackageData.description}
+                  onChange={handleNewPackageChange}
+                  rows={2}
+                  className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  placeholder="Opis pakietu..."
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="packagePrice" className="block text-gray-300 mb-1">
+                    Cena (zł)
+                  </label>
+                  <input
+                    type="number"
+                    id="packagePrice"
+                    name="price"
+                    value={newPackageData.price}
+                    onChange={handleNewPackageChange}
+                    min="0"
+                    className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="packageDeposit" className="block text-gray-300 mb-1">
+                    Zaliczka (zł)
+                  </label>
+                  <input
+                    type="number"
+                    id="packageDeposit"
+                    name="depositAmount"
+                    value={newPackageData.depositAmount}
+                    onChange={handleNewPackageChange}
+                    min="0"
+                    className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="packageDuration" className="block text-gray-300 mb-1">
+                    Czas trwania (min)
+                  </label>
+                  <input
+                    type="number"
+                    id="packageDuration"
+                    name="duration"
+                    value={newPackageData.duration}
+                    onChange={handleNewPackageChange}
+                    min="15"
+                    step="15"
+                    className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="packageMaxPeople" className="block text-gray-300 mb-1">
+                    Maks. liczba osób
+                  </label>
+                  <input
+                    type="number"
+                    id="packageMaxPeople"
+                    name="maxPeople"
+                    value={newPackageData.maxPeople}
+                    onChange={handleNewPackageChange}
+                    min="1"
+                    className="w-full bg-gray-700 text-white border border-gray-600 rounded-md p-2 focus:outline-none focus:border-[#f36e21]"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-4 mt-6">
+              <button
+                type="button"
+                onClick={() => setShowCreatePackageForm(false)}
+                className="px-4 py-2 border border-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+              >
+                Anuluj
+              </button>
+              
+              <button
+                type="button"
+                onClick={createPackage}
+                disabled={isCreatingPackage}
+                className={`px-6 py-2 bg-[#f36e21] text-white font-bold rounded-md hover:bg-[#ff7b2e] transition-colors ${
+                  isCreatingPackage ? 'opacity-70 cursor-not-allowed' : ''
+                }`}
+              >
+                {isCreatingPackage ? 'Tworzenie...' : 'Dodaj pakiet'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 } 
