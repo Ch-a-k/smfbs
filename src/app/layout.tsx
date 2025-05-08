@@ -2,10 +2,10 @@ import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import CookieConsent from '@/components/CookieConsent'
-import { I18nProvider } from '@/i18n/I18nContext'
 import { Inter } from 'next/font/google'
 import GoogleTagManager from '@/components/GoogleTagManager'
 import MetaPixel from '@/components/MetaPixel'
+import Providers from './providers'
 
 // Load custom fonts
 const impact = localFont({
@@ -23,8 +23,8 @@ const akrobat = localFont({
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Smash&Fun - Rage Room #1 in Warsaw',
-  description: 'Release stress and emotions in the most exciting way! Visit our rage room in Warsaw.',
+  title: 'SMFBS - Smash My Frustrations By Smashing',
+  description: 'Najlepszy Room escape w Warszawie',
   metadataBase: new URL('https://smashandfun.pl'),
   openGraph: {
     type: 'website',
@@ -110,12 +110,12 @@ export default function RootLayout({
         <meta name="msapplication-TileColor" content="#f36e21" />
       </head>
       <body className="bg-[#231f20]">
-        <I18nProvider>
+        <Providers>
           <GoogleTagManager />
           <MetaPixel />
           {children}
           <CookieConsent />
-        </I18nProvider>
+        </Providers>
       </body>
     </html>
   )
