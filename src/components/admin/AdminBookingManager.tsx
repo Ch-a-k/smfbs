@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { PaymentStatus, Booking } from '@/types/booking';
-import { format } from 'date-fns';
-import { ru } from 'date-fns/locale';
+import { format, isToday } from 'date-fns';
+import { ru, pl } from 'date-fns/locale';
 import AdminBookingList from './AdminBookingList';
 import AdminBookingDetails from './AdminBookingDetails';
 import AdminCreateBooking from './AdminCreateBooking';
+import { Calendar, Search, X, Filter, ChevronDown } from 'lucide-react';
 
 interface AdminBookingManagerProps {
   bookings: Booking[];
@@ -25,17 +26,36 @@ export default function AdminBookingManager({
 }: AdminBookingManagerProps) {
   const [filterStatus, setFilterStatus] = useState<PaymentStatus | 'ALL'>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [filteredBookings, setFilteredBookings] = useState<Booking[]>(bookings);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showNewBooking, setShowNewBooking] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showStatusFilter, setShowStatusFilter] = useState(false);
+  const datePickerRef = useRef<HTMLDivElement>(null);
+  const statusFilterRef = useRef<HTMLDivElement>(null);
   
-  // Обновляем отфильтрованные бронирования при изменении фильтров или бронирований
+  // Закрытие выпадающих меню при клике вне их
   useEffect(() => {
-    filterBookings();
-  }, [bookings, selectedDate, filterStatus, searchTerm]);
+    function handleClickOutside(event: MouseEvent) {
+      // Обработка клика вне календаря
+      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+        setShowDatePicker(false);
+      }
+      
+      // Обработка клика вне фильтра статусов
+      if (statusFilterRef.current && !statusFilterRef.current.contains(event.target as Node)) {
+        setShowStatusFilter(false);
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
   
-  // Функция фильтрации бронирований
-  const filterBookings = () => {
+  // Вместо вызова функции filterBookings и обновления состояния в useEffect,
+  // используем useMemo для вычисления отфильтрованных бронирований
+  const filteredBookings = useMemo(() => {
     let filtered = [...bookings];
     
     // Фильтр по дате
@@ -52,18 +72,20 @@ export default function AdminBookingManager({
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
       filtered = filtered.filter(booking => 
-        (typeof booking.name === 'string' && booking.name.toLowerCase().includes(search)) ||
-        (typeof booking.email === 'string' && booking.email.toLowerCase().includes(search)) ||
-        (typeof booking.phone === 'string' && booking.phone.toString().includes(search)) ||
-        (typeof booking.packageName === 'string' && booking.packageName.toLowerCase().includes(search)) ||
-        booking.roomId.toString().includes(search) ||
-        booking.totalAmount.toString().includes(search)
+        (booking.name && booking.name.toLowerCase().includes(search)) ||
+        (booking.customerName && booking.customerName.toLowerCase().includes(search)) ||
+        (booking.email && booking.email.toLowerCase().includes(search)) ||
+        (booking.customerEmail && booking.customerEmail.toLowerCase().includes(search)) ||
+        (booking.phone && booking.phone.toString().includes(search)) ||
+        (booking.customerPhone && booking.customerPhone.toString().includes(search)) ||
+        (booking.packageName && booking.packageName.toLowerCase().includes(search)) ||
+        (booking.roomId && booking.roomId.toString().includes(search)) ||
+        (booking.totalAmount !== undefined && booking.totalAmount.toString().includes(search))
       );
     }
     
-    setFilteredBookings(filtered);
     return filtered;
-  };
+  }, [bookings, selectedDate, filterStatus, searchTerm]);
   
   const getPaymentStatusText = (status: PaymentStatus): string => {
     switch (status) {
@@ -78,6 +100,7 @@ export default function AdminBookingManager({
     if (onDateSelect) {
       onDateSelect(null);
     }
+    setShowDatePicker(false);
   };
   
   const handleClearAllFilters = () => {
@@ -105,6 +128,116 @@ export default function AdminBookingManager({
       // Здесь можно добавить обновление списка бронирований
     }
   };
+
+  const handleDateSelect = (date: string) => {
+    if (onDateSelect) {
+      onDateSelect(date);
+    }
+    setShowDatePicker(false);
+  };
+
+  const handleStatusSelect = (status: PaymentStatus | 'ALL') => {
+    setFilterStatus(status);
+    setShowStatusFilter(false);
+  };
+
+  // Генерация календаря выбора даты
+  const renderDatePicker = () => {
+    const today = new Date();
+    const month = today.getMonth();
+    const year = today.getFullYear();
+    
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
+    
+    // Создаем массив дней месяца
+    const days = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(i);
+    }
+    
+    // Добавляем пустые ячейки в начало для правильного отображения календаря
+    const emptyDaysStart = Array(firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1).fill(null);
+    
+    const getDayClass = (day: number) => {
+      const date = new Date(year, month, day);
+      const dateString = format(date, 'yyyy-MM-dd');
+      const hasBookings = bookings.some(booking => booking.date === dateString);
+      
+      let classes = "w-10 h-10 rounded-full flex items-center justify-center cursor-pointer ";
+      
+      if (isToday(date)) {
+        classes += "bg-blue-600 text-white hover:bg-blue-700 ";
+      } else {
+        classes += "hover:bg-gray-700 ";
+      }
+      
+      if (hasBookings) {
+        classes += "font-bold border border-[#f36e21] ";
+      }
+      
+      if (selectedDate === dateString) {
+        classes += "ring-2 ring-[#f36e21] ring-offset-2 ring-offset-gray-800 ";
+      }
+      
+      return classes;
+    };
+    
+    return (
+      <div ref={datePickerRef} className="absolute z-50 mt-2 bg-gray-800 rounded-lg shadow-lg p-4 animate-fade-in w-[280px] sm:w-[320px] right-0 sm:right-auto">
+        <div className="mb-4 flex justify-between items-center">
+          <h3 className="text-white font-medium">
+            {format(new Date(year, month), 'MMMM yyyy', { locale: pl })}
+          </h3>
+          <button 
+            onClick={() => setShowDatePicker(false)}
+            className="text-gray-400 hover:text-white"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-7 gap-1 mb-2">
+          {['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'So', 'Nd'].map((day, index) => (
+            <div key={index} className="text-center text-xs text-gray-400 p-1">
+              {day}
+            </div>
+          ))}
+        </div>
+        
+        <div className="grid grid-cols-7 gap-2">
+          {emptyDaysStart.map((_, index) => (
+            <div key={`empty-start-${index}`} className="w-10 h-10"></div>
+          ))}
+          
+          {days.map(day => (
+            <div
+              key={`day-${day}`}
+              className={getDayClass(day)}
+              onClick={() => handleDateSelect(format(new Date(year, month, day), 'yyyy-MM-dd'))}
+            >
+              {day}
+            </div>
+          ))}
+        </div>
+        
+        <div className="mt-4 flex justify-between">
+          <button 
+            onClick={handleClearDate} 
+            className="text-sm text-red-400 hover:text-red-300"
+          >
+            Wyczyść datę
+          </button>
+          <button 
+            onClick={() => handleDateSelect(format(new Date(), 'yyyy-MM-dd'))}
+            className="text-sm text-blue-400 hover:text-blue-300"
+          >
+            Dzisiaj
+          </button>
+        </div>
+      </div>
+    );
+  };
   
   if (isLoading) {
     return (
@@ -117,18 +250,50 @@ export default function AdminBookingManager({
   return (
     <div className="space-y-4">
       {/* Верхняя панель с фильтрами */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0 bg-gray-800 p-4 rounded-lg shadow">
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as PaymentStatus | 'ALL')}
-            className="px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
-          >
-            <option value="ALL">Все статусы</option>
-            <option value="UNPAID">Неоплаченные</option>
-            <option value="DEPOSIT_PAID">Частично оплаченные</option>
-            <option value="FULLY_PAID">Полностью оплаченные</option>
-          </select>
+          <div className="relative" ref={statusFilterRef}>
+            <button
+              onClick={() => setShowStatusFilter(!showStatusFilter)}
+              className="flex items-center bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-md text-sm transition-colors"
+            >
+              <Filter className="mr-2 h-4 w-4" />
+              {filterStatus === 'ALL' ? 'Все статусы' : getPaymentStatusText(filterStatus)}
+              <ChevronDown className="ml-2 h-4 w-4" />
+            </button>
+            
+            {/* Выпадающее меню для фильтра */}
+            {showStatusFilter && (
+              <div className="absolute left-0 mt-1 w-48 rounded-md shadow-lg bg-gray-700 z-10">
+                <div className="py-1 rounded-md bg-gray-700 shadow-xs">
+                  <button
+                    onClick={() => handleStatusSelect('ALL')}
+                    className={`block px-4 py-2 text-sm leading-5 text-white w-full text-left ${filterStatus === 'ALL' ? 'bg-gray-600' : 'hover:bg-gray-600'}`}
+                  >
+                    Все статусы
+                  </button>
+                  <button
+                    onClick={() => handleStatusSelect('UNPAID')}
+                    className={`block px-4 py-2 text-sm leading-5 text-white w-full text-left ${filterStatus === 'UNPAID' ? 'bg-gray-600' : 'hover:bg-gray-600'}`}
+                  >
+                    Nieopłacone
+                  </button>
+                  <button
+                    onClick={() => handleStatusSelect('DEPOSIT_PAID')}
+                    className={`block px-4 py-2 text-sm leading-5 text-white w-full text-left ${filterStatus === 'DEPOSIT_PAID' ? 'bg-gray-600' : 'hover:bg-gray-600'}`}
+                  >
+                    Zaliczka
+                  </button>
+                  <button
+                    onClick={() => handleStatusSelect('FULLY_PAID')}
+                    className={`block px-4 py-2 text-sm leading-5 text-white w-full text-left ${filterStatus === 'FULLY_PAID' ? 'bg-gray-600' : 'hover:bg-gray-600'}`}
+                  >
+                    Opłacone
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           
           <div className="relative w-full sm:w-64">
             <input
@@ -136,41 +301,50 @@ export default function AdminBookingManager({
               placeholder="Поиск по имени, email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
+              className="pl-10 pr-4 py-2 w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-[#f36e21] focus:border-[#f36e21] text-sm text-white"
             />
             <div className="absolute left-3 top-2.5 text-gray-400">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+              <Search className="h-4 w-4" />
             </div>
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-2.5 text-gray-400 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
         
         <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
-          {selectedDate && (
-            <div className="flex items-center">
-              <span className="mr-2 text-sm font-medium">
-                {format(new Date(selectedDate), 'dd MMMM yyyy', { locale: ru })}
-              </span>
-              <button
-                onClick={handleClearDate}
-                className="text-red-500 hover:text-red-700 text-sm"
-              >
-                ✕
-              </button>
-            </div>
+          <div className="relative">
+            <button
+              onClick={() => setShowDatePicker(prev => !prev)}
+              className="flex items-center bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-md text-sm transition-colors"
+            >
+              <Calendar className="mr-2 h-4 w-4" />
+              {selectedDate 
+                ? format(new Date(selectedDate), 'dd MMMM yyyy', { locale: pl })
+                : 'Выбрать дату'
+              }
+            </button>
+            
+            {showDatePicker && renderDatePicker()}
+          </div>
+          
+          {(filterStatus !== 'ALL' || searchTerm || selectedDate) && (
+            <button
+              onClick={handleClearAllFilters}
+              className="px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded-md text-white transition-colors"
+            >
+              Сбросить фильтры
+            </button>
           )}
           
           <button
-            onClick={handleClearAllFilters}
-            className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
-          >
-            Сбросить фильтры
-          </button>
-          
-          <button
             onClick={handleCreateBooking}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+            className="px-4 py-2 bg-[#f36e21] text-white rounded-md hover:bg-[#ff7b2e] transition-colors text-sm"
           >
             Новое бронирование
           </button>
@@ -184,7 +358,7 @@ export default function AdminBookingManager({
         </div>
       ) : (
         <AdminBookingList
-          bookings={filterBookings()}
+          bookings={filteredBookings}
           selectedDate={selectedDate}
           onViewBooking={handleViewBooking}
           filterStatus={filterStatus}

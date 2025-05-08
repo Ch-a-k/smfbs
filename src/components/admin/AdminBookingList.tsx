@@ -72,32 +72,9 @@ export default function AdminBookingList({
     }
   };
 
-  // Фильтрация и сортировка бронирований
-  const filteredAndSortedBookings = useMemo(() => {
-    // Сначала фильтруем по выбранной дате (если указана)
-    let filtered = selectedDate 
-      ? bookings.filter(booking => booking.date === selectedDate)
-      : bookings;
-    
-    // Фильтруем по статусу оплаты (если не 'ALL')
-    if (filterStatus && filterStatus !== 'ALL') {
-      filtered = filtered.filter(booking => booking.paymentStatus === filterStatus);
-    }
-    
-    // Фильтруем по поисковому запросу
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(booking => 
-        (booking.name && booking.name.toLowerCase().includes(searchLower)) ||
-        (booking.email && booking.email.toLowerCase().includes(searchLower)) ||
-        (booking.phone && booking.phone.toString().includes(searchTerm)) ||
-        (booking.packageName && booking.packageName.toLowerCase().includes(searchLower)) ||
-        (booking.comment && booking.comment.toLowerCase().includes(searchLower))
-      );
-    }
-    
-    // Сортируем результаты
-    return filtered.sort((a, b) => {
+  // Только сортировка бронирований (фильтрация уже выполнена в родительском компоненте)
+  const sortedBookings = useMemo(() => {
+    return [...bookings].sort((a, b) => {
       let aValue: any = a[sortField];
       let bValue: any = b[sortField];
       
@@ -124,7 +101,7 @@ export default function AdminBookingList({
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [bookings, selectedDate, filterStatus, searchTerm, sortField, sortDirection]);
+  }, [bookings, sortField, sortDirection]);
 
   if (bookings.length === 0) {
     return (
@@ -209,14 +186,14 @@ export default function AdminBookingList({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-700">
-            {filteredAndSortedBookings.map(booking => (
+            {sortedBookings.map(booking => (
               <tr 
                 key={booking.id.toString()}
                 className="hover:bg-gray-700/50 transition-colors cursor-pointer"
                 onClick={() => onViewBooking(booking)}
               >
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
-                  {format(parseISO(booking.date), 'd MMM yyyy', { locale: pl })}
+                  {booking.date && format(parseISO(booking.date), 'd MMM yyyy', { locale: pl })}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
                   {booking.startTime} - {booking.endTime}
@@ -232,7 +209,7 @@ export default function AdminBookingList({
                   {booking.roomId}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
-                  {booking.totalAmount} PLN
+                  {booking.totalAmount !== undefined ? `${booking.totalAmount} PLN` : '-'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <span className={`px-2 py-1 rounded-full text-xs ${getPaymentStatusColor(booking.paymentStatus)}`}>
@@ -256,14 +233,14 @@ export default function AdminBookingList({
         </table>
       </div>
       
-      {filteredAndSortedBookings.length === 0 && (
+      {sortedBookings.length === 0 && (
         <div className="text-center py-8 text-gray-400">
           {searchTerm 
             ? 'Brak rezerwacji pasujących do wyszukiwania'
             : filterStatus !== 'ALL'
               ? `Brak rezerwacji ze statusem "${getPaymentStatusText(filterStatus as PaymentStatus)}"`
               : selectedDate
-                ? `Brak rezerwacji na dzień ${format(parseISO(selectedDate), 'd MMMM yyyy', { locale: pl })}`
+                ? `Brak rezerwacji na dzień ${selectedDate ? format(parseISO(selectedDate), 'd MMMM yyyy', { locale: pl }) : ''}`
                 : 'Brak rezerwacji'
           }
         </div>

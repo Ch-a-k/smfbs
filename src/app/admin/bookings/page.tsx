@@ -9,58 +9,18 @@ import AdminBookingDetails from '@/components/admin/AdminBookingDetails';
 import AdminCreateBooking from '@/components/admin/AdminCreateBooking';
 import AdminBookingManager from '@/components/admin/AdminBookingManager';
 import Link from 'next/link';
+import { useBookings, useBookingMutations } from '@/app/api/hooks';
 
 // Типы для вкладок администратора
 type AdminTab = 'calendar' | 'list' | 'analytics' | 'create';
 
 export default function AdminBookingsPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('calendar');
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { bookings, isLoading, error, refetch } = useBookings();
+  const { createBooking, updatePaymentStatus, updateAdminComment, deleteBooking } = useBookingMutations();
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showBookingDetails, setShowBookingDetails] = useState(false);
-  
-  // Загрузка бронирований
-  useEffect(() => {
-    fetchBookings();
-  }, []);
-  
-  // Функция загрузки бронирований
-  const fetchBookings = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/bookings');
-      if (!response.ok) {
-        throw new Error('Failed to fetch bookings');
-      }
-      const data = await response.json();
-      console.log('Загруженные бронирования:', data);
-      
-      // Проверяем, правильно ли сформированы объекты бронирований
-      if (Array.isArray(data) && data.length > 0) {
-        console.log('Пример бронирования:', data[0]);
-        console.log('Поле date:', data[0].date);
-        console.log('Поле bookingDate:', data[0].bookingDate);
-        
-        // Убедимся, что все поля даты корректно преобразованы
-        const mappedData = data.map(booking => ({
-          ...booking,
-          // Убедимся, что у каждого бронирования есть поле date
-          date: booking.date || booking.bookingDate || 
-            (booking.createdAt ? new Date(booking.createdAt).toISOString().split('T')[0] : null)
-        }));
-        
-        setBookings(mappedData);
-      } else {
-        setBookings(data);
-      }
-    } catch (error) {
-      console.error('Error loading bookings:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
   
   // Обработчик просмотра деталей бронирования
   const handleViewBooking = (booking: Booking) => {
@@ -73,78 +33,15 @@ export default function AdminBookingsPage() {
     try {
       console.log('Создание бронирования с данными:', bookingData, 'Статус оплаты:', paymentStatus);
       
-      // Формируем данные для отправки
-      const bookingToCreate = {
-        ...bookingData,
-        // Добавляем маппинг полей name -> customerName, email -> customerEmail, phone -> customerPhone
-        customerName: bookingData.name,
-        customerEmail: bookingData.email,
-        customerPhone: bookingData.phone,
-        // Преобразуем numPeople и numberOfPeople
-        numPeople: bookingData.numberOfPeople,
-        // Преобразуем totalAmount в totalPrice
-        totalPrice: bookingData.totalAmount,
-        // Используем поле booking_date для даты бронирования
-        booking_date: bookingData.date,
-        // Убедимся, что все числовые поля действительно числа
-        roomId: typeof bookingData.roomId === 'string' ? parseInt(bookingData.roomId, 10) : bookingData.roomId,
-        numberOfPeople: typeof bookingData.numberOfPeople === 'string' 
-          ? parseInt(bookingData.numberOfPeople, 10) 
-          : bookingData.numberOfPeople,
-        totalAmount: typeof bookingData.totalAmount === 'string' 
-          ? parseFloat(bookingData.totalAmount) 
-          : bookingData.totalAmount,
-        depositAmount: typeof bookingData.depositAmount === 'string' 
-          ? parseFloat(bookingData.depositAmount) 
-          : bookingData.depositAmount,
-        paidAmount: typeof bookingData.paidAmount === 'string' 
-          ? parseFloat(bookingData.paidAmount) 
-          : bookingData.paidAmount,
-        // Добавляем статус оплаты если это админский запрос
-        paymentStatus
-      };
-
-      // Отображаем точные данные, отправляемые на сервер
-      console.log('Данные для отправки на сервер:', JSON.stringify(bookingToCreate, null, 2));
-
-      // Отправляем запрос на создание бронирования
-      const response = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(bookingToCreate),
-      });
-
-      // Получаем содержимое ответа, независимо от статуса
-      const responseText = await response.text();
-      console.log('Полученный ответ сервера:', responseText);
+      await createBooking(bookingData, paymentStatus);
       
-      // Пробуем преобразовать ответ в JSON
-      let responseData;
-      try {
-        responseData = JSON.parse(responseText);
-      } catch (e) {
-        console.error('Не удалось разобрать ответ как JSON:', e);
-        throw new Error('Некорректный формат ответа от сервера');
-      }
-
-      // Проверяем ответ сервера
-      if (!response.ok) {
-        const errorMessage = responseData?.error || responseData?.details || 'Не удалось создать бронирование';
-        console.error('Ошибка ответа API:', responseData);
-        throw new Error(errorMessage);
-      }
-
-      console.log('Результат создания бронирования:', responseData);
-
       // Обновляем список бронирований
-      await fetchBookings();
+      await refetch();
       
       // Возвращаемся к календарю
       setActiveTab('calendar');
       
-      // Сообщение об успешном создании (если есть компонент уведомлений)
+      // Сообщение об успешном создании
       alert('Бронирование успешно создано');
     } catch (error) {
       console.error('Ошибка создания бронирования:', error);
@@ -156,24 +53,10 @@ export default function AdminBookingsPage() {
   // Обработчик обновления статуса оплаты
   const handlePaymentStatusUpdate = async (bookingId: string | number, newStatus: PaymentStatus) => {
     try {
-      const response = await fetch('/api/bookings', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id: bookingId,
-          paymentStatus: newStatus,
-          // В реальном приложении здесь нужен токен авторизации для админа
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to update payment status');
-      }
+      await updatePaymentStatus(bookingId, newStatus);
       
       // Обновляем список бронирований
-      await fetchBookings();
+      await refetch();
       
       // Обновляем выбранное бронирование, если оно было выбрано
       if (selectedBooking && selectedBooking.id === bookingId) {
@@ -189,24 +72,10 @@ export default function AdminBookingsPage() {
   // Обработчик обновления комментария администратора
   const handleAdminCommentUpdate = async (bookingId: string | number, comment: string) => {
     try {
-      const response = await fetch('/api/bookings', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id: bookingId,
-          adminComment: comment,
-          // В реальном приложении здесь нужен токен авторизации для админа
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to update admin comment');
-      }
+      await updateAdminComment(bookingId, comment);
       
       // Обновляем список бронирований
-      await fetchBookings();
+      await refetch();
       
       // Обновляем выбранное бронирование, если оно было выбрано
       if (selectedBooking && selectedBooking.id === bookingId) {
@@ -226,19 +95,10 @@ export default function AdminBookingsPage() {
     }
     
     try {
-      const response = await fetch(`/api/bookings?id=${bookingId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to delete booking');
-      }
+      await deleteBooking(bookingId);
       
       // Обновляем список бронирований
-      await fetchBookings();
+      await refetch();
       
       // Если было выбрано удаленное бронирование, закрываем его
       if (selectedBooking && selectedBooking.id === bookingId) {
@@ -278,6 +138,8 @@ export default function AdminBookingsPage() {
             isLoading={isLoading}
           />
         );
+      case 'analytics':
+        return renderAnalyticsTab();
       default:
         return null;
     }
@@ -313,10 +175,10 @@ export default function AdminBookingsPage() {
     
     // Доход за текущий и прошлый месяцы
     const currentMonthRevenue = currentMonthBookings.reduce((sum, booking) => 
-      sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount : booking.paidAmount), 0);
+      sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount || 0 : booking.paidAmount || 0), 0);
       
     const previousMonthRevenue = previousMonthBookings.reduce((sum, booking) => 
-      sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount : booking.paidAmount), 0);
+      sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount || 0 : booking.paidAmount || 0), 0);
     
     // Статистика по комнатам
     const roomStats = [1, 2, 3, 4].map(roomId => {
@@ -325,28 +187,74 @@ export default function AdminBookingsPage() {
         roomId,
         bookingsCount: roomBookings.length,
         revenue: roomBookings.reduce((sum, booking) => 
-          sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount : booking.paidAmount), 0)
+          sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount || 0 : booking.paidAmount || 0), 0),
+        occupancyRate: roomBookings.length > 0 ? (roomBookings.length / 30 * 100).toFixed(1) + '%' : '0%'
       };
-    });
+    }).sort((a, b) => b.bookingsCount - a.bookingsCount);
     
     // Статистика по пакетам
-    const packageIds = [...new Set(bookings.map(booking => booking.packageId))];
-    const packageStats = packageIds.map(packageId => {
-      const packageName = bookings.find(b => b.packageId === packageId)?.packageName || packageId;
-      const packageBookings = currentMonthBookings.filter(booking => booking.packageId === packageId);
+    const packageIds = [...new Set(bookings.filter(booking => booking.packageId !== undefined).map(booking => booking.packageId))];
+    const packageStats = packageIds
+      .map(packageId => {
+        const packageName = bookings.find(b => b.packageId === packageId)?.packageName || `Package ${packageId}`;
+        const packageBookings = currentMonthBookings.filter(booking => booking.packageId === packageId);
+        return {
+          packageId,
+          packageName,
+          bookingsCount: packageBookings.length,
+          revenue: packageBookings.reduce((sum, booking) => 
+            sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount || 0 : booking.paidAmount || 0), 0),
+          averagePrice: packageBookings.length > 0 
+            ? (packageBookings.reduce((sum, booking) => sum + (booking.totalAmount || 0), 0) / packageBookings.length).toFixed(0)
+            : 0
+        };
+      })
+      .filter(pkg => pkg.bookingsCount > 0)
+      .sort((a, b) => b.bookingsCount - a.bookingsCount);
+    
+    // Статистика по дням недели
+    const daysOfWeek = ['Niedziela', 'Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota'];
+    const dayStats = daysOfWeek.map((dayName, index) => {
+      const dayBookings = bookings.filter(booking => {
+        try {
+          const date = parseISO(booking.date);
+          return date.getDay() === index;
+        } catch (e) {
+          return false;
+        }
+      });
+      
       return {
-        packageId,
-        packageName,
-        bookingsCount: packageBookings.length,
-        revenue: packageBookings.reduce((sum, booking) => 
-          sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount : booking.paidAmount), 0)
+        day: dayName,
+        bookingsCount: dayBookings.length,
+        revenue: dayBookings.reduce((sum, booking) => 
+          sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount || 0 : booking.paidAmount || 0), 0)
       };
-    });
+    }).sort((a, b) => b.bookingsCount - a.bookingsCount);
+    
+    // Статистика по статусам оплаты
+    const paymentStatusStats = [
+      {
+        status: 'Opłacone w całości',
+        count: bookings.filter(b => b.paymentStatus === 'FULLY_PAID').length,
+        percentage: (bookings.filter(b => b.paymentStatus === 'FULLY_PAID').length / (bookings.length || 1) * 100).toFixed(1) + '%'
+      },
+      {
+        status: 'Zaliczka',
+        count: bookings.filter(b => b.paymentStatus === 'DEPOSIT_PAID').length,
+        percentage: (bookings.filter(b => b.paymentStatus === 'DEPOSIT_PAID').length / (bookings.length || 1) * 100).toFixed(1) + '%'
+      },
+      {
+        status: 'Nieopłacone',
+        count: bookings.filter(b => b.paymentStatus === 'UNPAID').length,
+        percentage: (bookings.filter(b => b.paymentStatus === 'UNPAID').length / (bookings.length || 1) * 100).toFixed(1) + '%'
+      }
+    ];
     
     return (
       <div className="space-y-8">
         {/* Общая статистика */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-gray-800 rounded-lg p-6">
             <h3 className="text-lg font-medium text-white mb-2">Rezerwacje w tym miesiącu</h3>
             <p className="text-3xl font-bold text-[#f36e21]">{currentMonthBookings.length}</p>
@@ -378,33 +286,123 @@ export default function AdminBookingsPage() {
                 : 'Brak rezerwacji w tym miesiącu'}
             </p>
           </div>
+          
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h3 className="text-lg font-medium text-white mb-2">Średnia wartość rezerwacji</h3>
+            <p className="text-3xl font-bold text-[#f36e21]">
+              {currentMonthBookings.length > 0 
+                ? (currentMonthRevenue / currentMonthBookings.length).toFixed(0) 
+                : 0} PLN
+            </p>
+            <p className="text-sm text-gray-400 mt-1">
+              {previousMonthBookings.length > 0 && previousMonthRevenue > 0
+                ? `${(((currentMonthRevenue / currentMonthBookings.length) / (previousMonthRevenue / previousMonthBookings.length) - 1) * 100).toFixed(1)}% vs. poprzedni miesiąc`
+                : 'Brak danych z poprzedniego miesiąca'}
+            </p>
+          </div>
+        </div>
+        
+        {/* Статистика по статусам оплаты */}
+        <div>
+          <h3 className="text-lg font-medium text-white mb-4">Statystyki płatności</h3>
+          <div className="bg-gray-800 rounded-lg overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-700">
+              <thead className="bg-gray-900">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Liczba rezerwacji</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Procent</th>
+                </tr>
+              </thead>
+              <tbody className="bg-gray-800 divide-y divide-gray-700">
+                {paymentStatusStats.map((stat, index) => (
+                  <tr key={index}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{stat.status}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{stat.count}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{stat.percentage}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
         
         {/* Статистика по комнатам */}
         <div>
           <h3 className="text-lg font-medium text-white mb-4">Statystyki pokoi</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {roomStats.map(room => (
-              <div key={room.roomId} className="bg-gray-800 rounded-lg p-4">
-                <h4 className="text-white font-medium">Pokój {room.roomId}</h4>
-                <p className="text-sm text-gray-400 mt-1">Rezerwacje: {room.bookingsCount}</p>
-                <p className="text-sm text-gray-400">Przychód: {room.revenue} PLN</p>
-              </div>
-            ))}
+          <div className="bg-gray-800 rounded-lg overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-700">
+              <thead className="bg-gray-900">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Pokój</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Liczba rezerwacji</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Przychód</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Poziom obłożenia</th>
+                </tr>
+              </thead>
+              <tbody className="bg-gray-800 divide-y divide-gray-700">
+                {roomStats.map(room => (
+                  <tr key={room.roomId}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">Pokój {room.roomId}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{room.bookingsCount}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{room.revenue} PLN</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{room.occupancyRate}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
         
         {/* Статистика по пакетам */}
         <div>
-          <h3 className="text-lg font-medium text-white mb-4">Statystyki pakietów</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {packageStats.map(pkg => (
-              <div key={pkg.packageId} className="bg-gray-800 rounded-lg p-4">
-                <h4 className="text-white font-medium">{pkg.packageName}</h4>
-                <p className="text-sm text-gray-400 mt-1">Rezerwacje: {pkg.bookingsCount}</p>
-                <p className="text-sm text-gray-400">Przychód: {pkg.revenue} PLN</p>
-              </div>
-            ))}
+          <h3 className="text-lg font-medium text-white mb-4">Najpopularniejsze pakiety</h3>
+          <div className="bg-gray-800 rounded-lg overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-700">
+              <thead className="bg-gray-900">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Pakiet</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Liczba rezerwacji</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Przychód</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Średnia cena</th>
+                </tr>
+              </thead>
+              <tbody className="bg-gray-800 divide-y divide-gray-700">
+                {packageStats.map(pkg => (
+                  <tr key={pkg.packageId}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{pkg.packageName}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{pkg.bookingsCount}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{pkg.revenue} PLN</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{pkg.averagePrice} PLN</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        {/* Статистика по дням недели */}
+        <div>
+          <h3 className="text-lg font-medium text-white mb-4">Najpopularniejsze dni tygodnia</h3>
+          <div className="bg-gray-800 rounded-lg overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-700">
+              <thead className="bg-gray-900">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Dzień tygodnia</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Liczba rezerwacji</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Przychód</th>
+                </tr>
+              </thead>
+              <tbody className="bg-gray-800 divide-y divide-gray-700">
+                {dayStats.map((day, index) => (
+                  <tr key={index}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{day.day}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{day.bookingsCount}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{day.revenue} PLN</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

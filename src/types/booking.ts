@@ -104,6 +104,8 @@ export interface Booking {
   name?: string; // Альтернативное поле для customerName
   email?: string; // Альтернативное поле для customerEmail
   phone?: string; // Альтернативное поле для customerPhone
+  adminComment?: string; // Комментарий администратора
+  additionalServices?: Array<{id: number, name: string, price: number}>; // Дополнительные услуги
 }
 
 export interface BookingAnalytics {
@@ -185,6 +187,8 @@ export function mapDatabaseBookingToBooking(dbBooking: any): Booking {
     updatedAt: dbBooking.updated_at || dbBooking.created_at || '',
     name: dbBooking.customer_name || dbBooking.name || '',
     email: dbBooking.customer_email || dbBooking.email || '',
-    phone: dbBooking.customer_phone || dbBooking.phone || ''
+    phone: dbBooking.customer_phone || dbBooking.phone || '',
+    adminComment: dbBooking.admin_comment || '',
+    additionalServices: dbBooking.additional_services || []
   };
 }

@@ -348,7 +348,7 @@ export function PricingSection() {
   ]
 
   return (
-    <section className="relative w-full bg-[#231f20] py-24 overflow-hidden">
+    <section id="booking" className="relative w-full bg-[#231f20] py-24 overflow-hidden">
       {/* Background effects */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-transparent" />
       <div className="absolute -top-40 -right-40 w-[600px] h-[600px] bg-[#f36e21]/5 rounded-full blur-[150px]" />

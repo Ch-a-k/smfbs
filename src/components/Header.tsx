@@ -116,7 +116,11 @@ export default function Header() {
   ];
 
   const scrollToServices = () => {
-    window.open('https://smashandfun.simplybook.it/v2/#book/count/1/', '_blank');
+    // Прокрутка к якорю #booking
+    const bookingSection = document.getElementById('booking');
+    if (bookingSection) {
+      bookingSection.scrollIntoView({ behavior: 'smooth' });
+    }
     setIsMobileMenuOpen(false);
   };
 

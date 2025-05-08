@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO, addMinutes } from 'date-fns';
 import { pl, enUS } from 'date-fns/locale';
-import { X, ChevronLeft, ChevronRight, CreditCard, Calendar, User, Check } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, CreditCard, Calendar, User, Check, ShoppingCart } from 'lucide-react';
 import { useI18n } from '@/i18n/I18nContext';
 import { Package as BasePackage, BookingFormData, PaymentStatus } from '@/types/booking';
 import BookingCalendar from './BookingCalendar';
 import TimeSelector from './TimeSelector';
+import CrossSellItems, { CrossSellItem } from './CrossSellItems';
+import { mockBookings, generateId } from '@/lib/frontend-mocks';
 
 // Определение типов
 type BookingStep = 'date' | 'contact' | 'payment';
@@ -27,6 +29,10 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
   // Состояние для выбора даты и времени
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  
+  // Состояние для управления кросс-селами
+  const [selectedCrossSellItems, setSelectedCrossSellItems] = useState<string[]>([]);
+  const [totalAdditionalPrice, setTotalAdditionalPrice] = useState(0);
   
   // Получаем цену из packageData с учетом возможных типов
   const getPackagePrice = (): number => {
@@ -56,6 +62,7 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     numberOfPeople: 1,
     promoCode: '',
     comment: '',
+    crossSellItems: [],
     totalAmount: getPackagePrice(),
     depositAmount: 20, // 20 PLN for all packages
   });
@@ -132,6 +139,17 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     }
   }, [selectedTime, selectedDate, packageData.duration]);
   
+  // Обновление формы при выборе/отмене дополнительных товаров
+  useEffect(() => {
+    // Обновляем список выбранных товаров в форме
+    setFormData(prev => ({
+      ...prev,
+      crossSellItems: selectedCrossSellItems,
+      // Обновляем итоговую сумму с учетом дополнительных товаров
+      totalAmount: getPackagePrice() + totalAdditionalPrice
+    }));
+  }, [selectedCrossSellItems, totalAdditionalPrice]);
+  
   // Handle form input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -155,6 +173,27 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
   // Handle payment method selection
   const handlePaymentMethodSelect = (method: PaymentStatus) => {
     setPaymentMethod(method);
+  };
+  
+  // Обработчик выбора/отмены дополнительного товара
+  const handleCrossSellItemToggle = (item: CrossSellItem) => {
+    setSelectedCrossSellItems(prev => {
+      const isSelected = prev.includes(item.id);
+      
+      // Если товар уже выбран, удаляем его
+      if (isSelected) {
+        // Уменьшаем общую стоимость
+        setTotalAdditionalPrice(current => current - item.price);
+        // Возвращаем новый массив без этого товара
+        return prev.filter(id => id !== item.id);
+      } else {
+        // Если товар не выбран, добавляем его
+        // Увеличиваем общую стоимость
+        setTotalAdditionalPrice(current => current + item.price);
+        // Возвращаем новый массив с этим товаром
+        return [...prev, item.id];
+      }
+    });
   };
   
   // Validate date and time step
@@ -254,8 +293,42 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
         status: 'PENDING',
       };
       
-      // In a real application, you would send this data to your API
+      // Добавляем новое бронирование в моковые данные
+      const newBooking = {
+        id: mockBookings.length + 1,
+        packageId: typeof bookingData.packageId === 'string' ? parseInt(bookingData.packageId) : bookingData.packageId,
+        packageName: bookingData.packageName || '',
+        roomId: bookingData.roomId,
+        roomName: 'Автоматически назначенный зал',
+        customerName: bookingData.name,
+        customerEmail: bookingData.email,
+        customerPhone: bookingData.phone,
+        date: bookingData.date,
+        startTime: bookingData.startTime,
+        endTime: bookingData.endTime,
+        numPeople: bookingData.numberOfPeople,
+        notes: bookingData.comment || '',
+        comment: bookingData.comment || '',
+        promoCode: bookingData.promoCode || '',
+        totalPrice: bookingData.totalAmount || 0,
+        totalAmount: bookingData.totalAmount || 0,
+        paymentStatus: paymentMethod,
+        paidAmount: finalPaymentAmount || 0,
+        depositAmount: bookingData.depositAmount || 0,
+        status: 'PENDING',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        name: bookingData.name,
+        email: bookingData.email,
+        phone: bookingData.phone,
+        numberOfPeople: bookingData.numberOfPeople
+      };
+      
+      // Добавляем в массив бронирований
+      mockBookings.push(newBooking);
+      
       console.log('Booking submitted:', bookingData);
+      console.log('New booking added to mock data:', newBooking);
       
       // Show success message and close modal
       alert(t('booking.success.message'));
@@ -491,6 +564,15 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                       rows={2}
                     />
                   </div>
+                  
+                  {/* Cross Sell Items Section */}
+                  <div className="mt-6 pt-4 border-t border-white/10">
+                    <CrossSellItems 
+                      onItemToggle={handleCrossSellItemToggle}
+                      selectedItems={selectedCrossSellItems}
+                      totalAdditionalPrice={totalAdditionalPrice}
+                    />
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -527,7 +609,48 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                         <span className="text-gray-400">{t('booking.payment.people')}:</span>
                         <span className="text-white">{formData.numberOfPeople}</span>
                       </div>
-                      <div className="flex justify-between font-medium pt-1.5 border-t border-white/10">
+                      
+                      {/* Отображение базовой цены пакета */}
+                      <div className="flex justify-between pt-1.5 border-t border-white/10 mt-1">
+                        <span className="text-gray-400">{t('booking.payment.basePrice')}:</span>
+                        <span className="text-white">{getPackagePrice()} PLN</span>
+                      </div>
+                      
+                      {/* Отображение дополнительных товаров, если они выбраны */}
+                      {selectedCrossSellItems.length > 0 && (
+                        <div className="space-y-1 mt-1">
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">{t('booking.payment.additionalItems')}:</span>
+                            <span className="text-[#f36e21]">+{totalAdditionalPrice} PLN</span>
+                          </div>
+                          
+                          {/* Список выбранных товаров */}
+                          <div className="ml-2 space-y-0.5">
+                            {selectedCrossSellItems.map((itemId) => {
+                              const crossSellItem = {
+                                glass: { name: t('home.pricing.extraItems.items.glass'), price: 25 },
+                                keyboard: { name: t('home.pricing.extraItems.items.keyboard'), price: 30 },
+                                tvMonitor: { name: t('home.pricing.extraItems.items.tvMonitor'), price: 50 },
+                                furniture: { name: t('home.pricing.extraItems.items.furniture'), price: 45 },
+                                printer: { name: t('home.pricing.extraItems.items.printer'), price: 40 },
+                                goProRecording: { name: t('home.pricing.extraItems.items.goProRecording'), price: 35 },
+                              }[itemId];
+                              
+                              return (
+                                <div key={itemId} className="flex justify-between text-gray-300">
+                                  <span className="flex items-center">
+                                    <Check className="w-2.5 h-2.5 mr-1 text-[#f36e21]" />
+                                    {crossSellItem?.name}
+                                  </span>
+                                  <span>{crossSellItem?.price} PLN</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="flex justify-between font-medium pt-1.5 border-t border-white/10 mt-1">
                         <span className="text-gray-300">{t('booking.payment.totalAmount')}:</span>
                         <span className="text-[#f36e21]">{formData.totalAmount} PLN</span>
                       </div>

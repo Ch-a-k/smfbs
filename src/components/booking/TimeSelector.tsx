@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useI18n } from '@/i18n/I18nContext';
 import { Clock } from 'lucide-react';
+import { format } from 'date-fns';
+import { getAvailableTimeSlots } from '@/lib/frontend-mocks';
 
 interface TimeSelectorProps {
   selectedTime: string | null;
@@ -27,58 +29,37 @@ export default function TimeSelector({ selectedTime, onChange, date, durationMin
   useEffect(() => {
     if (!date) return;
     
-    // In a real application, there should be an API request here to get available slots
-    // for the selected date, considering occupancy and working hours
     setIsLoading(true);
     
-    // Simulating data loading from the server
+    // Получаем форматированную дату для использования в API
+    const formattedDate = format(date, 'yyyy-MM-dd');
+    
+    // Временный packageId для теста - в реальном приложении должен быть передан в компонент
+    const packageId = 'bulka'; // ID базового пакета из моковых данных
+    
+    // Небольшая задержка для симуляции загрузки
     setTimeout(() => {
-      const slots = generateTimeSlots();
-      setTimeSlots(slots);
-      setIsLoading(false);
+      try {
+        // Получаем слоты из моковых данных
+        const availableTimeSlots = getAvailableTimeSlots(formattedDate, packageId);
+        
+        // Преобразуем в формат, который ожидает компонент
+        const formattedSlots = availableTimeSlots.map(slot => ({
+          id: slot.id,
+          time: slot.startTime,
+          formattedTime: slot.startTime,
+          isAvailable: slot.available
+        }));
+        
+        setTimeSlots(formattedSlots);
+      } catch (error) {
+        console.error('Ошибка получения временных слотов:', error);
+        setTimeSlots([]);
+      } finally {
+        setIsLoading(false);
+      }
     }, 500);
   }, [date]);
-  
-  // Function to generate time slots (stub)
-  const generateTimeSlots = () => {
-    const slots: TimeSlot[] = [];
-    
-    // Start of work day - 9:00, end - 22:00
-    // Interval between slots - 30 minutes
-    const startHour = 9;
-    const endHour = 22;
-    const interval = 30; // minutes
-    
-    // Example of random unavailability of slots
-    const randomUnavailable = new Set<string>();
-    for (let i = 0; i < 5; i++) {
-      const hour = Math.floor(Math.random() * (endHour - startHour)) + startHour;
-      const minute = Math.random() > 0.5 ? 30 : 0;
-      randomUnavailable.add(`${hour}:${minute === 0 ? '00' : '30'}`);
-    }
-    
-    // Generating slots
-    for (let hour = startHour; hour < endHour; hour++) {
-      for (let minute = 0; minute < 60; minute += interval) {
-        const timeString = `${hour}:${minute === 0 ? '00' : minute}`;
-        const isAvailable = !randomUnavailable.has(timeString);
-        
-        // Formatted time for display
-        const hourFormatted = hour.toString().padStart(2, '0');
-        const minuteFormatted = minute.toString().padStart(2, '0');
-        const formattedTime = `${hourFormatted}:${minuteFormatted}`;
-        
-        slots.push({
-          id: `time-${hour}-${minute}`,
-          time: formattedTime,
-          formattedTime: formattedTime,
-          isAvailable
-        });
-      }
-    }
-    
-    return slots;
-  };
   
   if (isLoading) {
     return (

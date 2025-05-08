@@ -12,14 +12,14 @@ export const en = {
     settings: 'Settings'
   },
   booking: {
-    title: 'Book Your Session',
+    title: 'Booking',
     steps: {
       date: 'Date & Time',
-      contact: 'Contact Info',
+      contact: 'Contact',
       payment: 'Payment'
     },
     date: {
-      title: 'Select Date and Time',
+      title: 'Select a date and time',
       selectDate: 'Select a date',
       selectTime: 'Select a time slot',
       noTimeSlots: 'No available time slots for this date',
@@ -31,33 +31,35 @@ export const en = {
       }
     },
     contact: {
-      title: 'Your Contact Information',
+      title: 'Enter your contact information',
       name: 'Full Name',
       namePlaceholder: 'Enter your full name',
-      email: 'Email Address',
-      emailPlaceholder: 'Enter your email address',
-      phone: 'Phone Number',
+      email: 'Email',
+      emailPlaceholder: 'Enter your email',
+      phone: 'Phone',
       phonePlaceholder: 'Enter your phone number',
       numberOfPeople: 'Number of People',
       promoCode: 'Promo Code (optional)',
       promoCodePlaceholder: 'Enter promo code if you have one',
-      comment: 'Additional Comments',
-      commentPlaceholder: 'Any special requests or information we should know'
+      comment: 'Comments (optional)',
+      commentPlaceholder: 'Any special requests or notes'
     },
     payment: {
-      title: 'Payment Method',
+      title: 'Payment information',
       summary: 'Booking Summary',
       package: 'Package',
       date: 'Date',
       time: 'Time',
-      people: 'Number of people',
-      totalAmount: 'Total amount',
-      method: 'Choose Payment Method',
+      people: 'People',
+      basePrice: 'Base Price',
+      additionalItems: 'Additional Items',
+      totalAmount: 'Total Amount',
+      method: 'Payment Method',
       fullPayment: 'Full Payment',
-      fullPaymentDesc: 'Pay the full amount now to confirm your booking',
+      fullPaymentDesc: 'Pay the full amount now',
       depositPayment: 'Deposit Only',
-      depositPaymentDesc: 'Pay a deposit now and the rest upon arrival',
-      provider: 'Secure payments processed by:'
+      depositPaymentDesc: 'Pay minimum deposit now, rest on arrival',
+      provider: 'Secure payment processed by Przelewy24'
     },
     calendar: {
       monthNames: 'January_February_March_April_May_June_July_August_September_October_November_December',
@@ -66,26 +68,31 @@ export const en = {
       nextMonth: 'Next month',
       prevMonth: 'Previous month'
     },
+    crossSell: {
+      title: 'Additional Items',
+      description: 'Enhance your experience with these additional items. Select the ones you want to add to your booking.',
+      add: 'Add to Booking'
+    },
     validation: {
       dateRequired: 'Please select a date',
-      timeRequired: 'Please select a time slot',
-      nameRequired: 'Please enter your full name',
-      emailRequired: 'Please enter your email address',
-      emailInvalid: 'Please enter a valid email address',
+      timeRequired: 'Please select a time',
+      nameRequired: 'Please enter your name',
+      emailRequired: 'Please enter your email',
+      emailInvalid: 'Please enter a valid email',
       phoneRequired: 'Please enter your phone number',
       phoneInvalid: 'Please enter a valid phone number'
     },
     buttons: {
       back: 'Back',
       next: 'Next',
-      book: 'Book Now',
+      book: 'Complete Booking',
       processing: 'Processing...'
     },
     success: {
       message: 'Your booking has been successfully submitted! You will receive a confirmation email shortly.'
     },
     error: {
-      message: 'There was an error processing your booking. Please try again.'
+      message: 'There was an error submitting your booking. Please try again.'
     }
   },
   nav: {

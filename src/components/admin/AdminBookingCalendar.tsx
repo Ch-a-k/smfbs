@@ -190,7 +190,7 @@ export default function AdminBookingCalendar({
     const isSelected = calendarDay.date === selectedDate;
     const hasBookings = hasBookingsForDate(calendarDay.date);
     
-    let classes = "h-10 w-10 rounded-full flex items-center justify-center text-sm relative ";
+    let classes = "h-12 w-full rounded-lg flex items-center justify-center text-sm relative ";
     
     if (!calendarDay.isCurrentMonth) {
       classes += "text-gray-500 ";
@@ -212,8 +212,8 @@ export default function AdminBookingCalendar({
   return (
     <div className="space-y-6">
       {/* Заголовок календаря */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="flex items-center w-full sm:w-auto justify-between sm:justify-start">
           <button
             onClick={goToPreviousMonth}
             className="p-2 text-gray-400 hover:text-white"
@@ -239,7 +239,7 @@ export default function AdminBookingCalendar({
         
         <button
           onClick={goToCurrentMonth}
-          className="text-sm text-gray-400 hover:text-white bg-gray-800 px-3 py-1 rounded-full"
+          className="text-sm text-gray-400 hover:text-white bg-gray-800 px-4 py-2 rounded-lg w-full sm:w-auto"
         >
           Dzisiaj
         </button>
@@ -248,7 +248,7 @@ export default function AdminBookingCalendar({
       {/* Дни недели */}
       <div className="grid grid-cols-7 gap-2 mb-2">
         {['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Nie'].map(day => (
-          <div key={day} className="text-center text-sm font-medium text-gray-400">
+          <div key={day} className="text-center text-sm font-medium text-gray-400 p-2">
             {day}
           </div>
         ))}
@@ -257,7 +257,7 @@ export default function AdminBookingCalendar({
       {/* Сетка календаря */}
       <div className="grid grid-cols-7 gap-2">
         {calendarDays.map((day, index) => (
-          <div key={index} className="min-h-[80px]">
+          <div key={index} className="min-h-[90px] relative">
             <button
               onClick={() => onDateSelect(day.date)}
               className={getDateClasses(day)}
@@ -265,7 +265,7 @@ export default function AdminBookingCalendar({
               {day.dayOfMonth}
               
               {hasBookingsForDate(day.date) && day.date !== selectedDate && (
-                <span className="absolute bottom-0 right-0 h-2 w-2 bg-[#f36e21] rounded-full"></span>
+                <span className="absolute bottom-1 right-1 h-3 w-3 bg-[#f36e21] rounded-full"></span>
               )}
             </button>
             
@@ -276,7 +276,7 @@ export default function AdminBookingCalendar({
                   <p className="text-xs text-gray-500 text-center">Brak rezerwacji</p>
                 ) : (
                   <div className="space-y-1 mt-1">
-                    {getBookingsForDate(day.date).map(booking => (
+                    {getBookingsForDate(day.date).slice(0, 2).map(booking => (
                       <button
                         key={booking.id}
                         onClick={() => onViewBooking(booking)}
@@ -293,6 +293,11 @@ export default function AdminBookingCalendar({
                         <span className="truncate block text-gray-400">{booking.name}</span>
                       </button>
                     ))}
+                    {getBookingsForDate(day.date).length > 2 && (
+                      <div className="text-xs text-center text-gray-400">
+                        +{getBookingsForDate(day.date).length - 2} więcej
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -302,7 +307,7 @@ export default function AdminBookingCalendar({
       </div>
       
       {/* Подробная информация о выбранном дне */}
-      <div className="mt-8 bg-gray-800 rounded-lg p-6">
+      <div className="mt-8 bg-gray-800 rounded-lg p-4 sm:p-6">
         <h3 className="text-lg font-medium text-white mb-4">
           {format(parseISO(selectedDate), 'd MMMM yyyy', { locale: pl })}
         </h3>
@@ -318,12 +323,12 @@ export default function AdminBookingCalendar({
               .map(booking => (
                 <div 
                   key={booking.id} 
-                  className="bg-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-600 transition-colors"
+                  className="bg-gray-700 rounded-lg p-3 sm:p-4 cursor-pointer hover:bg-gray-600 transition-colors"
                   onClick={() => onViewBooking(booking)}
                 >
-                  <div className="flex justify-between items-start">
+                  <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-white font-medium">
                           {booking.startTime} - {booking.endTime}
                         </span>
@@ -341,11 +346,11 @@ export default function AdminBookingCalendar({
                       </p>
                     </div>
                     
-                    <div className="flex flex-col items-end">
+                    <div className="flex flex-row sm:flex-col items-start sm:items-end justify-between w-full sm:w-auto">
                       <span className="text-lg font-bold text-white">
                         {booking.totalAmount} PLN
                       </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full mt-1 ${
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
                         booking.paymentStatus === 'FULLY_PAID' ? 'bg-green-500/20 text-green-300' :
                         booking.paymentStatus === 'DEPOSIT_PAID' ? 'bg-yellow-500/20 text-yellow-300' :
                         'bg-red-500/20 text-red-300'

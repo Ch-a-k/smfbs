@@ -3,7 +3,14 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { PaymentStatus, BookingFormData, Room, Package, RoomSchedule } from '@/types/booking';
-import { supabase } from '@/utils/supabase/client';
+import { 
+  mockRooms, 
+  mockPackages, 
+  getAvailableTimeSlots, 
+  calculateEndTime,
+  getDefaultWorkSchedule,
+  generateId
+} from '@/lib/frontend-mocks';
 
 export interface AdminCreateBookingProps {
   onBookingCreate?: (bookingData: BookingFormData, paymentStatus: PaymentStatus) => Promise<void>;
@@ -62,20 +69,13 @@ export default function AdminCreateBooking({ onBookingCreate, onClose }: AdminCr
     const fetchData = async () => {
       setIsLoading(true);
       try {
-      // Загружаем пакеты через API
-      const packagesResponse = await fetch('/api/packages');
-      if (!packagesResponse.ok) {
-        throw new Error('Не удалось загрузить пакеты');
-      }
-      
-        const packagesData = await packagesResponse.json();
-      console.log('Получены данные о пакетах:', packagesData);
-      
-        setPackages(packagesData);
+      // Используем моковые данные вместо API
+      console.log('Получены данные о пакетах:', mockPackages);
+      setPackages(mockPackages);
       
       // Если есть пакеты, выбираем первый по умолчанию
-      if (packagesData.length > 0) {
-        const defaultPackage = packagesData[0];
+      if (mockPackages.length > 0) {
+        const defaultPackage = mockPackages[0];
         
         // Устанавливаем ID пакета в виде строки, чтобы избежать проблем сравнения
         const packageId = defaultPackage.id.toString();
@@ -90,20 +90,13 @@ export default function AdminCreateBooking({ onBookingCreate, onClose }: AdminCr
         console.log(`Выбран пакет по умолчанию: id=${packageId}, name=${defaultPackage.name}`);
       }
       
-      // Загружаем все комнаты через API
-      const roomsResponse = await fetch('/api/rooms');
-      if (!roomsResponse.ok) {
-        throw new Error('Не удалось загрузить комнаты');
-      }
-      
-      const roomsData = await roomsResponse.json();
-      console.log('Получены данные о комнатах:', roomsData);
-      
-      setAllRooms(roomsData);
+      // Используем моковые данные для комнат
+      console.log('Получены данные о комнатах:', mockRooms);
+      setAllRooms(mockRooms);
       
       // Проверяем доступность комнат
-      if (packagesData.length > 0) {
-        const selectedPackage = packagesData[0];
+      if (mockPackages.length > 0) {
+        const selectedPackage = mockPackages[0];
         const startTime = formData.startTime;
         const date = formData.date;
         const endTime = calculateEndTime(startTime, selectedPackage.duration);
@@ -131,71 +124,43 @@ export default function AdminCreateBooking({ onBookingCreate, onClose }: AdminCr
     try {
       console.log(`Проверка доступности комнат: дата=${date}, время=${startTime}-${endTime}, пакет=${packageId}`);
       
-      // ВНИМАНИЕ: Обходное решение проблемы с API
-      // Так как API доступности может работать некорректно, всегда используем все комнаты
-      console.log('Используем все комнаты напрямую, минуя API проверки доступности');
-      setAvailableRooms(allRooms);
+      // Получаем слоты времени из наших моковых данных
+      const timeSlots = getAvailableTimeSlots(date, packageId);
       
-      if (allRooms.length > 0 && !formData.roomId) {
-        // Выбираем первую комнату, если еще не выбрана
-        setFormData(prev => ({ ...prev, roomId: allRooms[0].id }));
-      }
+      // Ищем текущий слот времени
+      const currentSlot = timeSlots.find(slot => slot.startTime === startTime);
       
-      setErrorMessage('');
-      
-      /* Закомментированный код для вызова API доступности
-      const response = await fetch(
-        `/api/bookings/availability?date=${date}&startTime=${startTime}&endTime=${endTime}&packageId=${packageId}&type=rooms`
-      );
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Ошибка API:', errorText);
-        throw new Error(`Ошибка при получении доступных комнат: ${response.status}`);
-      }
-      
-      const responseData = await response.json();
-      console.log('Ответ API:', responseData);
-      
-      // Проверяем, что ответ - это массив комнат
-      if (!Array.isArray(responseData)) {
-        console.error('Некорректный формат ответа:', responseData);
-        throw new Error('Неправильный формат ответа от сервера');
-      }
-      
-      // Если ответ пустой, пробуем запросить все комнаты
-      if (responseData.length === 0) {
-        console.log('Нет доступных комнат по API, получаем все комнаты');
-        // Временное решение: просто используем все комнаты, если API не возвращает данные
-        setAvailableRooms(allRooms);
+      if (currentSlot && currentSlot.availableRooms && currentSlot.availableRooms.length > 0) {
+        // Фильтруем комнаты по доступным id
+        const availableRoomsList = mockRooms.filter(room => 
+          currentSlot.availableRooms!.includes(room.id)
+        );
         
-        if (allRooms.length > 0) {
-          setFormData(prev => ({ ...prev, roomId: allRooms[0].id }));
-          setErrorMessage('');
-        } else {
-          setFormData(prev => ({ ...prev, roomId: 0 }));
-          setErrorMessage('Нет доступных комнат в системе');
+        setAvailableRooms(availableRoomsList);
+        
+        if (availableRoomsList.length > 0 && !formData.roomId) {
+          setFormData(prev => ({ ...prev, roomId: availableRoomsList[0].id }));
         }
-      } else {
-        // Используем полученные комнаты
-        setAvailableRooms(responseData);
+        
         setErrorMessage('');
+      } else {
+        // Если нет доступных комнат, используем все комнаты
+        console.log('Нет доступных комнат для этого слота, используем все комнаты');
+        setAvailableRooms(mockRooms);
         
-        // Если есть доступные комнаты, выбираем первую по умолчанию
-        if (responseData.length > 0) {
-          setFormData(prev => ({ ...prev, roomId: responseData[0].id }));
+        if (mockRooms.length > 0 && !formData.roomId) {
+          setFormData(prev => ({ ...prev, roomId: mockRooms[0].id }));
         }
       }
-      */
     } catch (error) {
       console.error('Ошибка получения доступных комнат:', error);
       
-      // В случае ошибки в API используем все комнаты
+      // В случае ошибки используем все комнаты
       console.log('Используем все комнаты из-за ошибки');
-      setAvailableRooms(allRooms);
+      setAvailableRooms(mockRooms);
       
-      if (allRooms.length > 0) {
-        setFormData(prev => ({ ...prev, roomId: allRooms[0].id }));
+      if (mockRooms.length > 0) {
+        setFormData(prev => ({ ...prev, roomId: mockRooms[0].id }));
         setErrorMessage('');
       } else {
         setErrorMessage('Не удалось получить список комнат');
@@ -259,18 +224,7 @@ export default function AdminCreateBooking({ onBookingCreate, onClose }: AdminCr
   // Расчет времени окончания на основе времени начала и продолжительности
   const calculateEndTime = (startTime: string, durationMinutes: number): string => {
     console.log(`Расчет времени окончания: старт=${startTime}, длительность=${durationMinutes} мин`);
-    
-    const [hours, minutes] = startTime.split(':').map(Number);
-    const startMinutes = hours * 60 + minutes;
-    const endMinutes = startMinutes + durationMinutes;
-    
-    const endHours = Math.floor(endMinutes / 60);
-    const endMinutesRemainder = endMinutes % 60;
-    
-    const result = `${endHours.toString().padStart(2, '0')}:${endMinutesRemainder.toString().padStart(2, '0')}`;
-    console.log(`Вычисленное время окончания: ${result}`);
-    
-    return result;
+    return calculateEndTime(startTime, durationMinutes);
   };
   
   // Обработчик отправки формы
@@ -318,16 +272,19 @@ export default function AdminCreateBooking({ onBookingCreate, onClose }: AdminCr
       // Подготовка данных для отправки
       const bookingData: BookingFormData = {
         ...formData,
+        // Преобразуем строковые значения в числовые для API
+        packageId: typeof selectedPackage.id === 'string' ? parseInt(selectedPackage.id) || 0 : selectedPackage.id,
+        roomId: formData.roomId,
         // Добавляем альтернативные имена полей для API
         customerName: formData.name,
         customerEmail: formData.email,
         customerPhone: formData.phone,
         numPeople: formData.numberOfPeople,
         packageName: selectedPackage.name,
-        totalAmount: selectedPackage.price,
-        totalPrice: selectedPackage.price, // Добавляем totalPrice для API
+        totalAmount: typeof selectedPackage.price === 'string' ? parseInt(selectedPackage.price) : selectedPackage.price,
+        totalPrice: typeof selectedPackage.price === 'string' ? parseInt(selectedPackage.price) : selectedPackage.price, // Добавляем totalPrice для API
         depositAmount: selectedPackage.depositAmount,
-        paidAmount: paymentStatus === 'FULLY_PAID' ? selectedPackage.price : 
+        paidAmount: paymentStatus === 'FULLY_PAID' ? (typeof selectedPackage.price === 'string' ? parseInt(selectedPackage.price) : selectedPackage.price) : 
                    paymentStatus === 'DEPOSIT_PAID' ? selectedPackage.depositAmount : 0,
       };
       
@@ -400,41 +357,23 @@ export default function AdminCreateBooking({ onBookingCreate, onClose }: AdminCr
       }
       
       // Создаем расписание работы по умолчанию
-      const defaultSchedule = {
-        monday: { isActive: true, startTime: '09:00', endTime: '22:00' },
-        tuesday: { isActive: true, startTime: '09:00', endTime: '22:00' },
-        wednesday: { isActive: true, startTime: '09:00', endTime: '22:00' },
-        thursday: { isActive: true, startTime: '09:00', endTime: '22:00' },
-        friday: { isActive: true, startTime: '09:00', endTime: '22:00' },
-        saturday: { isActive: true, startTime: '10:00', endTime: '22:00' },
-        sunday: { isActive: true, startTime: '10:00', endTime: '20:00' }
-      };
+      const defaultSchedule = getDefaultWorkSchedule();
       
-      // ОБХОДНОЙ ПУТЬ: Используем прямой вызов Supabase для создания комнаты
-      // из-за проблемы с автоинкрементом в таблице
-      console.log('Используем прямое создание через Supabase...');
-      
-      // Генерируем случайный ID для комнаты (временное решение)
-      const randomId = Math.floor(Math.random() * 10000) + 100;
-      
-      const { data, error } = await supabase
-        .from('rooms')
-        .insert([
-          { 
-            id: randomId,
+      // Создаем новую комнату в моковых данных
+      const newRoom: Room = {
+        id: mockRooms.length + 1,
             name: newRoomData.name, 
             capacity: newRoomData.capacity, 
-            max_people: newRoomData.maxPeople,
-            is_active: true,
+        maxPeople: newRoomData.maxPeople,
+        isActive: true,
             available: true,
-            work_schedule: defaultSchedule
-          }
-        ])
-        .select();
+        workSchedule: defaultSchedule
+      };
       
-      if (error) throw new Error(error.message);
+      // Добавляем комнату в моковые данные
+      mockRooms.push(newRoom);
       
-      console.log('Комната успешно создана:', data);
+      console.log('Комната успешно создана:', newRoom);
       
       // Обновляем список комнат
       fetchData();
@@ -465,33 +404,23 @@ export default function AdminCreateBooking({ onBookingCreate, onClose }: AdminCr
         return;
       }
       
-      // ОБХОДНОЙ ПУТЬ: Используем прямой вызов Supabase для создания пакета
-      // из-за проблемы с автоинкрементом в таблице
-      console.log('Используем прямое создание через Supabase...');
-      
-      // Генерируем ID из имени пакета или случайно
-      const packageId = newPackageData.name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now().toString().slice(-4);
-      
-      const { data, error } = await supabase
-        .from('packages')
-        .insert([
-          { 
-            id: packageId,
+      // Создаем новый пакет в моковых данных
+      const newPackage: Package = {
+        id: newPackageData.name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now().toString().slice(-4),
             name: newPackageData.name, 
             description: newPackageData.description,
             price: newPackageData.price,
-            deposit_amount: newPackageData.depositAmount,
+        depositAmount: newPackageData.depositAmount,
             duration: newPackageData.duration,
-            max_people: newPackageData.maxPeople,
-            preferred_rooms: [],
-            is_active: true
-          }
-        ])
-        .select();
+        maxPeople: newPackageData.maxPeople,
+        preferredRooms: [],
+        isActive: true
+      };
       
-      if (error) throw new Error(error.message);
+      // Добавляем пакет в моковые данные
+      mockPackages.push(newPackage);
       
-      console.log('Пакет успешно создан:', data);
+      console.log('Пакет успешно создан:', newPackage);
       
       // Обновляем список пакетов
       fetchData();

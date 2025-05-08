@@ -1,108 +1,136 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { useI18n } from '@/i18n/I18nContext';
+import { 
+  Tv, 
+  Keyboard, 
+  Mouse, 
+  Printer, 
+  Phone, 
+  Camera, 
+  Wine, 
+  Sofa,
+  Check 
+} from 'lucide-react';
+import { ReactElement } from 'react';
+import { mockCrossSellItems } from '@/lib/frontend-mocks';
 
-interface CrossSellItem {
+// Определение типов для кросс-селов
+export type CrossSellItem = {
   id: string;
   name: string;
-  description: string;
+  icon: ReactElement;
   price: number;
-}
+  selected?: boolean;
+};
 
 interface CrossSellItemsProps {
-  items: CrossSellItem[];
-  onContinue: (selectedItems: string[]) => void;
+  onItemToggle: (item: CrossSellItem) => void;
+  selectedItems: string[];
+  totalAdditionalPrice: number;
 }
 
-export function CrossSellItems({ items, onContinue }: CrossSellItemsProps) {
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  
-  // Обработчик выбора/отмены кросс-селла
-  const toggleItem = (itemId: string) => {
-    setSelectedItems(prev => {
-      if (prev.includes(itemId)) {
-        return prev.filter(id => id !== itemId);
-      } else {
-        return [...prev, itemId];
+export default function CrossSellItems({ onItemToggle, selectedItems, totalAdditionalPrice }: CrossSellItemsProps) {
+  const { t } = useI18n();
+  const [crossSellItems, setCrossSellItems] = useState<CrossSellItem[]>([]);
+
+  // Загружаем данные при монтировании компонента
+  useEffect(() => {
+    // Создаем иконки для элементов на основе их ID
+    const getIconForItem = (id: string): ReactElement => {
+      switch (id) {
+        case 'glass':
+          return <Wine className="w-4 h-4" />;
+        case 'keyboard':
+          return <Keyboard className="w-4 h-4" />;
+        case 'tvMonitor':
+          return <Tv className="w-4 h-4" />;
+        case 'furniture':
+          return <Sofa className="w-4 h-4" />;
+        case 'printer':
+          return <Printer className="w-4 h-4" />;
+        case 'goProRecording':
+          return <Camera className="w-4 h-4" />;
+        default:
+          return <Check className="w-4 h-4" />;
       }
-    });
-  };
-  
-  // Расчет дополнительной стоимости
-  const calculateAdditionalCost = (): number => {
-    return items
-      .filter(item => selectedItems.includes(item.id))
-      .reduce((sum, item) => sum + item.price, 0);
-  };
-  
-  // Обработчик кнопки продолжить
-  const handleContinue = () => {
-    onContinue(selectedItems);
-  };
-  
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {items.map(item => (
-          <div
-            key={item.id}
-            onClick={() => toggleItem(item.id)}
-            className={`
-              bg-[#231f20] border rounded-lg p-4 cursor-pointer transition-all
-              ${selectedItems.includes(item.id) 
-                ? 'border-[#f36e21]' 
-                : 'border-white/10 hover:border-white/30'}
-            `}
-          >
-            <div className="flex justify-between items-start mb-3">
-              <h3 className="text-lg font-bold text-white">{item.name}</h3>
-              <div className="h-5 w-5 rounded-full border border-white/30 flex items-center justify-center">
-                {selectedItems.includes(item.id) && (
-                  <div className="h-3 w-3 rounded-full bg-[#f36e21]"></div>
-                )}
-              </div>
-            </div>
-            <p className="text-white/70 text-sm mb-3">{item.description}</p>
-            <div className="text-xl font-bold text-[#f36e21]">{item.price} zł</div>
-          </div>
-        ))}
-      </div>
-      
-      <div className="bg-[#231f20] border border-white/10 rounded-lg p-4 mt-6">
-        <div className="flex justify-between items-center">
-          <span className="text-white">Podstawowa cena:</span>
-          <span className="text-white font-bold">199 zł</span>
-        </div>
-        
-        {calculateAdditionalCost() > 0 && (
-          <div className="flex justify-between items-center mt-2">
-            <span className="text-white">Dodatki:</span>
-            <span className="text-white font-bold">+{calculateAdditionalCost()} zł</span>
+    };
+
+    // Преобразуем моковые данные в формат, ожидаемый компонентом
+    const items = mockCrossSellItems
+      .filter(item => item.isActive)
+      .map(item => ({
+        id: item.id,
+        name: item.name,
+        icon: getIconForItem(item.id),
+        price: item.price,
+        selected: selectedItems.includes(item.id)
+      }));
+
+    setCrossSellItems(items);
+  }, [selectedItems]);
+
+  // Функция для отрисовки ячейки товара
+  const renderItemCell = (item: CrossSellItem, index: number) => {
+    const isSelected = selectedItems.includes(item.id);
+    
+    return (
+      <motion.button
+        key={item.id}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, delay: index * 0.05 }}
+        whileHover={{ y: -3 }}
+        onClick={() => onItemToggle(item)}
+        className={`relative flex flex-col items-center p-3 rounded-lg border text-center transition-all duration-200
+          ${isSelected 
+            ? 'border-[#f36e21] bg-[#f36e21]/10' 
+            : 'bg-black/40 border-white/10 hover:border-white/20'}`
+        }
+      >
+        {isSelected && (
+          <div className="absolute -top-2 -right-2 bg-[#f36e21] rounded-full w-5 h-5 flex items-center justify-center">
+            <Check className="w-3 h-3 text-white" />
           </div>
         )}
         
-        <div className="border-t border-white/10 mt-3 pt-3 flex justify-between items-center">
-          <span className="text-white font-bold">Razem:</span>
-          <span className="text-xl font-bold text-[#f36e21]">{199 + calculateAdditionalCost()} zł</span>
+        <div className={`p-2 rounded-full ${isSelected ? 'bg-[#f36e21]/20 text-[#f36e21]' : 'bg-black/30 text-gray-400'}`}>
+          {item.icon}
         </div>
+        
+        <div className="mt-2 text-xs font-medium text-gray-300 line-clamp-2 h-8">
+          {item.name}
+        </div>
+        
+        <div className={`mt-1 text-sm font-bold ${isSelected ? 'text-[#f36e21]' : 'text-white'}`}>
+          {item.price} PLN
+        </div>
+      </motion.button>
+    );
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-white text-sm font-medium">
+          {t('booking.crossSell.title')}
+        </h4>
+        
+        {totalAdditionalPrice > 0 && (
+          <div className="text-[#f36e21] text-sm font-bold">
+            +{totalAdditionalPrice} PLN
+          </div>
+        )}
       </div>
       
-      <div className="flex flex-col md:flex-row justify-between gap-4 mt-6">
-        <button
-          type="button"
-          onClick={() => onContinue([])}
-          className="px-6 py-3 border border-white/20 text-white rounded-md hover:bg-white/5 transition-colors"
-        >
-          Pomiń dodatki
-        </button>
-        
-        <button
-          type="button"
-          onClick={handleContinue}
-          className="px-6 py-3 bg-[#f36e21] text-white font-bold rounded-md hover:bg-[#ff7b2e] transition-colors"
-        >
-          {selectedItems.length > 0 ? 'Kontynuuj z dodatkami' : 'Kontynuuj'}
-        </button>
+      <p className="text-xs text-gray-400">
+        {t('booking.crossSell.description')}
+      </p>
+      
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        {crossSellItems.map((item, index) => renderItemCell(item, index))}
       </div>
     </div>
   );

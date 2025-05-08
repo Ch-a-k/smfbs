@@ -74,10 +74,10 @@ export default function BookingCalendar({ selectedDate, onChange }: BookingCalen
   };
   
   return (
-    <div className="rounded-lg bg-black/40 border border-white/10 backdrop-blur-sm shadow p-4">
+    <div className="rounded-lg bg-black/40 border border-white/10 backdrop-blur-sm shadow p-3 sm:p-4">
       {/* Calendar header */}
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-3 mb-4">
+        <div className="flex items-center w-full sm:w-auto justify-between sm:justify-start">
           <button
             onClick={goToPreviousMonth}
             className="p-2 text-gray-400 hover:text-[#f36e21] transition-colors"
@@ -105,7 +105,7 @@ export default function BookingCalendar({ selectedDate, onChange }: BookingCalen
         
         <button
           onClick={goToCurrentMonth}
-          className="flex items-center text-sm bg-black/60 hover:bg-black/80 text-white py-1 px-2 rounded transition-colors border border-white/10"
+          className="flex items-center text-sm bg-black/60 hover:bg-black/80 text-white py-1 px-3 rounded-lg transition-colors border border-white/10 w-full sm:w-auto justify-center"
         >
           <CalendarIcon className="h-4 w-4 mr-1" />
           <span>{t('booking.calendar.today')}</span>
@@ -115,7 +115,7 @@ export default function BookingCalendar({ selectedDate, onChange }: BookingCalen
       {/* Day names */}
       <div className="grid grid-cols-7 gap-1 mb-2">
         {getDayNames().map((day: string) => (
-          <div key={day} className="text-center text-sm font-medium text-gray-400">
+          <div key={day} className="text-center text-sm font-medium text-gray-400 p-1">
             {day}
           </div>
         ))}
@@ -129,7 +129,7 @@ export default function BookingCalendar({ selectedDate, onChange }: BookingCalen
             onClick={() => !day.isDisabled && onChange(day.date)}
             disabled={day.isDisabled}
             className={`
-              h-10 w-full rounded-md flex items-center justify-center text-sm
+              h-10 md:h-12 w-full rounded-md flex items-center justify-center text-sm
               ${!day.isCurrentMonth ? 'text-gray-500' : 'text-white'}
               ${day.isDisabled ? 'cursor-not-allowed opacity-30' : 'hover:bg-black/60'}
               ${day.isToday ? 'border border-white/20' : ''}

@@ -12,14 +12,14 @@ export const pl = {
     settings: 'Ustawienia'
   },
   booking: {
-    title: 'Zarezerwuj Sesję',
+    title: 'Rezerwacja',
     steps: {
-      date: 'Data i Czas',
-      contact: 'Dane Kontaktowe',
+      date: 'Data i czas',
+      contact: 'Kontakt',
       payment: 'Płatność'
     },
     date: {
-      title: 'Wybierz Datę i Godzinę',
+      title: 'Wybierz datę i godzinę',
       selectDate: 'Wybierz datę',
       selectTime: 'Wybierz godzinę',
       noTimeSlots: 'Brak dostępnych godzin w tym dniu',
@@ -31,33 +31,61 @@ export const pl = {
       }
     },
     contact: {
-      title: 'Twoje Dane Kontaktowe',
-      name: 'Imię i Nazwisko',
-      namePlaceholder: 'Wprowadź swoje imię i nazwisko',
-      email: 'Adres Email',
-      emailPlaceholder: 'Wprowadź swój adres email',
-      phone: 'Numer Telefonu',
-      phonePlaceholder: 'Wprowadź swój numer telefonu',
-      numberOfPeople: 'Liczba Osób',
-      promoCode: 'Kod Promocyjny (opcjonalnie)',
-      promoCodePlaceholder: 'Wprowadź kod promocyjny jeśli posiadasz',
-      comment: 'Dodatkowe Uwagi',
-      commentPlaceholder: 'Dodatkowe informacje lub specjalne prośby'
+      title: 'Wprowadź swoje dane kontaktowe',
+      name: 'Imię i nazwisko',
+      namePlaceholder: 'Wpisz swoje imię i nazwisko',
+      email: 'Email',
+      emailPlaceholder: 'Wpisz swój adres email',
+      phone: 'Telefon',
+      phonePlaceholder: 'Wpisz swój numer telefonu',
+      numberOfPeople: 'Liczba osób',
+      promoCode: 'Kod promocyjny (opcjonalnie)',
+      promoCodePlaceholder: 'Wpisz kod promocyjny jeśli posiadasz',
+      comment: 'Komentarz (opcjonalnie)',
+      commentPlaceholder: 'Dodatkowe uwagi lub prośby'
     },
     payment: {
-      title: 'Metoda Płatności',
-      summary: 'Podsumowanie Rezerwacji',
+      title: 'Informacje o płatności',
+      summary: 'Podsumowanie rezerwacji',
       package: 'Pakiet',
       date: 'Data',
-      time: 'Godzina',
-      people: 'Liczba osób',
-      totalAmount: 'Całkowita kwota',
-      method: 'Wybierz Metodę Płatności',
-      fullPayment: 'Pełna Płatność',
-      fullPaymentDesc: 'Zapłać pełną kwotę teraz, aby potwierdzić rezerwację',
-      depositPayment: 'Tylko Zaliczka',
-      depositPaymentDesc: 'Zapłać zaliczkę teraz, a resztę przy przybyciu',
-      provider: 'Bezpieczne płatności obsługiwane przez:'
+      time: 'Czas',
+      people: 'Osoby',
+      basePrice: 'Cena podstawowa',
+      additionalItems: 'Dodatkowe przedmioty',
+      totalAmount: 'Łączna kwota',
+      method: 'Metoda płatności',
+      fullPayment: 'Pełna płatność',
+      fullPaymentDesc: 'Zapłać pełną kwotę teraz',
+      depositPayment: 'Tylko zaliczka',
+      depositPaymentDesc: 'Zapłać minimalną zaliczkę teraz, resztę przy przybyciu',
+      provider: 'Bezpieczna płatność przetwarzana przez Przelewy24'
+    },
+    crossSell: {
+      title: 'Dodatkowe przedmioty',
+      description: 'Wzbogać swoje doświadczenie o dodatkowe przedmioty. Wybierz te, które chcesz dodać do rezerwacji.',
+      add: 'Dodaj do rezerwacji'
+    },
+    validation: {
+      dateRequired: 'Wybierz datę',
+      timeRequired: 'Wybierz godzinę',
+      nameRequired: 'Wpisz swoje imię i nazwisko',
+      emailRequired: 'Wpisz swój adres email',
+      emailInvalid: 'Wpisz poprawny adres email',
+      phoneRequired: 'Wpisz swój numer telefonu',
+      phoneInvalid: 'Wpisz poprawny numer telefonu'
+    },
+    buttons: {
+      back: 'Wstecz',
+      next: 'Dalej',
+      book: 'Zakończ rezerwację',
+      processing: 'Przetwarzanie...'
+    },
+    success: {
+      message: 'Twoja rezerwacja została pomyślnie złożona! Wkrótce otrzymasz e-mail z potwierdzeniem.'
+    },
+    error: {
+      message: 'Wystąpił błąd podczas składania rezerwacji. Spróbuj ponownie.'
     },
     calendar: {
       monthNames: 'Styczeń_Luty_Marzec_Kwiecień_Maj_Czerwiec_Lipiec_Sierpień_Wrzesień_Październik_Listopad_Grudzień',
@@ -65,27 +93,6 @@ export const pl = {
       today: 'Dzisiaj',
       nextMonth: 'Następny miesiąc',
       prevMonth: 'Poprzedni miesiąc'
-    },
-    validation: {
-      dateRequired: 'Proszę wybrać datę',
-      timeRequired: 'Proszę wybrać godzinę',
-      nameRequired: 'Proszę podać imię i nazwisko',
-      emailRequired: 'Proszę podać adres email',
-      emailInvalid: 'Proszę podać prawidłowy adres email',
-      phoneRequired: 'Proszę podać numer telefonu',
-      phoneInvalid: 'Proszę podać prawidłowy numer telefonu'
-    },
-    buttons: {
-      back: 'Wstecz',
-      next: 'Dalej',
-      book: 'Zarezerwuj',
-      processing: 'Przetwarzanie...'
-    },
-    success: {
-      message: 'Twoja rezerwacja została pomyślnie złożona! Wkrótce otrzymasz e-mail z potwierdzeniem.'
-    },
-    error: {
-      message: 'Wystąpił błąd podczas przetwarzania rezerwacji. Spróbuj ponownie.'
     }
   },
   happyHours: {
