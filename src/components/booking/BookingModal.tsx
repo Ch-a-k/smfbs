@@ -1,3 +1,15 @@
+/**
+ * Модальное окно бронирования услуг
+ * 
+ * Компонент реализует полный цикл бронирования услуг, включая:
+ * - Выбор даты и времени
+ * - Заполнение контактной информации
+ * - Выбор дополнительных услуг
+ * - Оплату и завершение бронирования
+ * 
+ * Компонент поддерживает мультиязычность и различные типы пакетов услуг.
+ */
+
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO, addMinutes } from 'date-fns';
@@ -15,16 +27,28 @@ import TimeSelector from './TimeSelector';
 import CrossSellItems, { CrossSellItem } from './CrossSellItems';
 import { mockBookings, generateId, mockCrossSellItems } from '@/lib/frontend-mocks';
 
-// Определение типов
+/**
+ * Типы шагов бронирования
+ * - date: выбор даты
+ * - time: выбор времени
+ * - contact: заполнение контактной информации
+ * - extras: выбор дополнительных услуг
+ * - payment: оплата и завершение
+ */
 type BookingStep = 'date' | 'time' | 'contact' | 'extras' | 'payment';
 
+/**
+ * Интерфейс пропсов для компонента модального окна бронирования
+ */
 interface BookingModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  packageData: BasePackage;
+  isOpen: boolean;               // Флаг для отображения/скрытия модального окна
+  onClose: () => void;           // Функция для закрытия модального окна
+  packageData: BasePackage;      // Данные о бронируемом пакете услуг
 }
 
-// Анимации
+/**
+ * Анимации для модального окна с использованием Framer Motion
+ */
 const modalAnimation = {
   hidden: { opacity: 0, scale: 0.95 },
   visible: { 
@@ -45,6 +69,9 @@ const modalAnimation = {
   }
 };
 
+/**
+ * Анимации для переходов между шагами бронирования
+ */
 const stepAnimation = {
   initial: { opacity: 0, x: 20 },
   animate: { opacity: 1, x: 0 },
@@ -52,22 +79,40 @@ const stepAnimation = {
   transition: { duration: 0.3 }
 };
 
+/**
+ * Основной компонент модального окна бронирования
+ * 
+ * Управляет многоступенчатым процессом бронирования, включая все этапы от
+ * выбора даты до оплаты. Поддерживает интернационализацию, валидацию форм,
+ * и различные способы оплаты.
+ * 
+ * @param props Пропсы компонента
+ * @returns React-компонент модального окна бронирования
+ */
 export default function BookingModal({ isOpen, onClose, packageData }: BookingModalProps) {
   const { t, locale } = useI18n();
+  // Текущий шаг бронирования
   const [currentStep, setCurrentStep] = useState<BookingStep>('date');
+  // Состояния загрузки и отправки формы
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Сообщение об ошибке
   const [errorMessage, setErrorMessage] = useState('');
   
   // Состояние для выбора даты и времени
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   
-  // Состояние для управления кросс-селами
+  // Состояние для управления дополнительными услугами
   const [selectedCrossSellItems, setSelectedCrossSellItems] = useState<string[]>([]);
   const [totalAdditionalPrice, setTotalAdditionalPrice] = useState(0);
   
-  // Получаем цену из packageData с учетом возможных типов
+  /**
+   * Получает цену из данных пакета с учетом возможных типов данных
+   * Обрабатывает случаи, когда цена представлена строкой или числом
+   * 
+   * @returns Числовое значение цены пакета
+   */
   const getPackagePrice = (): number => {
     if (typeof packageData.price === 'number') {
       return packageData.price;
@@ -81,7 +126,7 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     return 0; // Если цена не указана или имеет неподдерживаемый тип
   };
   
-  // Form data
+  // Данные формы бронирования
   const [formData, setFormData] = useState<BookingFormData>({
     packageId: packageData.id,
     packageName: packageData.name,
@@ -100,10 +145,13 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     depositAmount: 20, // 20 PLN for all packages
   });
   
-  // Payment method
+  // Метод оплаты
   const [paymentMethod, setPaymentMethod] = useState<PaymentStatus>('FULLY_PAID');
   
-  // Блокировка скролла основной страницы при открытии модального окна
+  /**
+   * Блокирует прокрутку основной страницы при открытии модального окна
+   * и восстанавливает при закрытии
+   */
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -117,7 +165,10 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     };
   }, [isOpen]);
   
-  // Сброс формы при открытии модального окна
+  /**
+   * Сбрасывает форму при открытии модального окна
+   * Инициализирует начальные значения для всех полей
+   */
   useEffect(() => {
     if (isOpen) {
       setCurrentStep('date');
@@ -138,7 +189,9 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     }
   }, [isOpen, packageData]);
   
-  // Обновление формы при выборе даты
+  /**
+   * Обновляет поле даты в форме при выборе даты
+   */
   useEffect(() => {
     if (selectedDate) {
       setFormData(prev => ({
@@ -148,7 +201,10 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     }
   }, [selectedDate]);
   
-  // Обновление формы при выборе времени
+  /**
+   * Обновляет поля времени начала и окончания при выборе времени
+   * Автоматически вычисляет время окончания на основе длительности пакета
+   */
   useEffect(() => {
     if (selectedTime) {
       // Вычисляем время окончания, добавляя длительность пакета к времени начала
@@ -175,27 +231,12 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     }
   }, [selectedTime, selectedDate, packageData.duration]);
   
-  // Обновление формы при выборе/отмене дополнительных товаров
+  /**
+   * Обновляет список выбранных дополнительных товаров в форме
+   * Этот useEffect больше не обновляет totalAmount, так как это
+   * делается напрямую в handleCrossSellItemToggle
+   */
   useEffect(() => {
-    // Этот useEffect больше не нужен, так как теперь мы обновляем
-    // totalAmount непосредственно в handleCrossSellItemToggle
-    // console.log("Package price:", getPackagePrice());
-    // console.log("Total additional price:", totalAdditionalPrice);
-    // console.log("Selected items:", selectedCrossSellItems);
-    
-    // // Обновляем список выбранных товаров в форме
-    // setFormData(prev => {
-    //   const newTotal = getPackagePrice() + totalAdditionalPrice;
-    //   console.log("New total amount:", newTotal);
-    //   
-    //   return {
-    //     ...prev,
-    //     crossSellItems: selectedCrossSellItems,
-    //     // Обновляем итоговую сумму с учетом дополнительных товаров
-    //     totalAmount: newTotal
-    //   };
-    // });
-    
     // Обновляем только список выбранных товаров в форме
     setFormData(prev => ({
       ...prev,
@@ -203,32 +244,46 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     }));
   }, [selectedCrossSellItems]);
   
-  // Handle form input changes
+  /**
+   * Обработчик изменений полей формы
+   */
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     
-    // Clear error message when user types
+    // Очищаем сообщение об ошибке при вводе пользователем
     if (errorMessage) setErrorMessage('');
   };
   
-  // Handle date selection
+  /**
+   * Обработчик выбора даты
+   */
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
     setSelectedTime(null); // Сбрасываем выбранное время при изменении даты
   };
   
-  // Handle time selection
+  /**
+   * Обработчик выбора времени
+   */
   const handleTimeSelect = (time: string) => {
     setSelectedTime(time);
   };
   
-  // Handle payment method selection
+  /**
+   * Обработчик выбора метода оплаты
+   */
   const handlePaymentMethodSelect = (method: PaymentStatus) => {
     setPaymentMethod(method);
   };
   
-  // Обработчик выбора/отмены дополнительного товара
+  /**
+   * Обработчик выбора/отмены дополнительного товара
+   * Обновляет список выбранных товаров и пересчитывает общую стоимость
+   * заказа сразу после выбора или отмены товара
+   * 
+   * @param item Выбранный или отмененный товар
+   */
   const handleCrossSellItemToggle = (item: CrossSellItem) => {
     setSelectedCrossSellItems(prev => {
       const isSelected = prev.includes(item.id);
@@ -267,7 +322,12 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     });
   };
   
-  // Validate date step
+  /**
+   * Валидация шага выбора даты
+   * Проверяет, выбрана ли дата
+   * 
+   * @returns true если данные валидны, false в противном случае
+   */
   const validateDateStep = (): boolean => {
     if (!selectedDate) {
       setErrorMessage(t('booking.validation.dateRequired'));
@@ -277,7 +337,12 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     return true;
   };
   
-  // Validate time step
+  /**
+   * Валидация шага выбора времени
+   * Проверяет, выбрано ли время
+   * 
+   * @returns true если данные валидны, false в противном случае
+   */
   const validateTimeStep = (): boolean => {
     if (!selectedTime) {
       setErrorMessage(t('booking.validation.timeRequired'));
@@ -287,7 +352,12 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     return true;
   };
   
-  // Validate contact information step
+  /**
+   * Валидация шага заполнения контактной информации
+   * Проверяет обязательные поля и формат email и телефона
+   * 
+   * @returns true если данные валидны, false в противном случае
+   */
   const validateContactStep = (): boolean => {
     if (!formData.name) {
       setErrorMessage(t('booking.validation.nameRequired'));
@@ -299,7 +369,7 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
       return false;
     }
     
-    // Simple email validation
+    // Простая валидация email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       setErrorMessage(t('booking.validation.emailInvalid'));
@@ -311,7 +381,7 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
       return false;
     }
     
-    // Simple phone validation (at least 9 digits)
+    // Простая валидация телефона (не менее 9 цифр)
     const phoneDigits = formData.phone.replace(/\D/g, '');
     if (phoneDigits.length < 9) {
       setErrorMessage(t('booking.validation.phoneInvalid'));
@@ -321,7 +391,10 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     return true;
   };
   
-  // Handle next step button click
+  /**
+   * Обработчик кнопки перехода к следующему шагу
+   * Выполняет валидацию текущего шага и переходит к следующему при успешной валидации
+   */
   const handleNextStep = () => {
     setErrorMessage('');
     
@@ -342,7 +415,9 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     }
   };
   
-  // Handle previous step button click
+  /**
+   * Обработчик кнопки возврата к предыдущему шагу
+   */
   const handlePrevStep = () => {
     setErrorMessage('');
     
@@ -357,21 +432,25 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     }
   };
   
-  // Handle form submission
+  /**
+   * Обработчик отправки формы бронирования
+   * Выполняет имитацию API-запроса для создания бронирования
+   * и обработку результатов
+   */
   const handleSubmit = async () => {
     setErrorMessage('');
     setIsSubmitting(true);
     
     try {
-      // Simulate API call with a delay
+      // Имитация API-запроса с задержкой
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Process payment method
+      // Определение суммы оплаты в зависимости от выбранного метода
       const finalPaymentAmount = paymentMethod === 'FULLY_PAID' 
         ? formData.totalAmount 
         : formData.depositAmount;
       
-      // Prepare booking data for submission
+      // Подготовка данных бронирования для отправки
       const bookingData = {
         ...formData,
         paymentMethod,
@@ -416,7 +495,7 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
       console.log('Booking submitted:', bookingData);
       console.log('New booking added to mock data:', newBooking);
       
-      // Show success message and close modal
+      // Показываем сообщение об успехе и закрываем модальное окно
       alert(t('booking.success.message'));
       onClose();
       
@@ -428,12 +507,22 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     }
   };
   
-  // Format date for display
+  /**
+   * Форматирует дату для отображения с учетом локализации
+   * 
+   * @param date Дата для форматирования
+   * @returns Отформатированная строка даты
+   */
   const formatDate = (date: Date) => {
     return format(date, 'EEEE, d MMMM yyyy', { locale: locale === 'pl' ? pl : enUS });
   };
   
-  // Функция для получения цены товара по ID
+  /**
+   * Возвращает цену товара по его идентификатору
+   * 
+   * @param itemId Идентификатор товара
+   * @returns Цена товара
+   */
   const getItemPrice = (itemId: string): number => {
     const itemPrices: Record<string, number> = {
       'glass': 50,        // 10 стеклянных предметов - 50 PLN
@@ -449,7 +538,7 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     return itemPrices[itemId] || 0;
   };
   
-  // If the modal is not open, don't render anything
+  // Если модальное окно закрыто, ничего не рендерим
   if (!isOpen) return null;
   
   return (

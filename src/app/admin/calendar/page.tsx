@@ -1,18 +1,175 @@
+/**
+ * Календарь бронирований для администратора
+ * 
+ * Эта страница позволяет администраторам просматривать и управлять всеми бронированиями
+ * в календарном виде. Возможности включают в себя:
+ * - Просмотр бронирований по дням месяца
+ * - Просмотр детальной информации о бронированиях за выбранный день
+ * - Статистику бронирований для выбранного дня
+ * - Добавление, редактирование и удаление бронирований
+ * 
+ * @module AdminCalendar
+ */
+
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format, addDays, isSameDay, isToday, addMonths } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { Trash2, Edit, ChevronLeft, ChevronRight, Clock, MapPin, User, Calendar as CalendarIcon, AlertCircle, CheckCircle, Clock3, Users, Plus } from 'lucide-react';
+import { Trash2, Edit, ChevronLeft, ChevronRight, Clock, MapPin, User, Calendar as CalendarIcon, AlertCircle, CheckCircle, Clock3, Users, Plus, X } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
-// Моковые данные бронирований
+/**
+ * Типы статусов бронирований
+ * - paid: полностью оплачено
+ * - deposit: внесен только задаток
+ * - unpaid: не оплачено
+ */
+type BookingStatus = 'paid' | 'deposit' | 'unpaid';
+
+/**
+ * Интерфейс бронирования
+ * Определяет структуру объекта бронирования для отображения в календаре
+ * и использования во всех компонентах страницы
+ */
+interface Booking {
+  id: string;                // Уникальный идентификатор бронирования
+  customerName: string;      // Имя клиента
+  packageName: string;       // Название пакета услуг
+  date: Date;                // Дата и время бронирования
+  duration: number;          // Продолжительность в минутах
+  room: string;              // Название комнаты/зала
+  status: BookingStatus;     // Статус оплаты
+  people: number;            // Количество людей
+}
+
+/**
+ * Конфигурация стилей для разных статусов бронирований
+ */
+interface StatusConfig {
+  bg: string;      // Цвет фона
+  border: string;  // Цвет границы
+  text: string;    // Цвет текста
+  badge: string;   // Фон бейджа
+  icon: React.ReactNode; // Иконка для статуса
+}
+
+/**
+ * Конфигурация стилей для разных статусов бронирований
+ * Используется для унифицированного отображения статусов во всех местах интерфейса
+ */
+const statusConfig: Record<BookingStatus, StatusConfig> = {
+  'paid': {
+    bg: 'bg-green-500/10',
+    border: 'border-green-500/50',
+    text: 'text-green-500',
+    badge: 'bg-green-500',
+    icon: <CheckCircle className="h-4 w-4" />
+  },
+  'deposit': {
+    bg: 'bg-amber-500/10',
+    border: 'border-amber-500/50',
+    text: 'text-amber-500',
+    badge: 'bg-amber-500',
+    icon: <Clock3 className="h-4 w-4" />
+  },
+  'unpaid': {
+    bg: 'bg-red-500/10',
+    border: 'border-red-500/50',
+    text: 'text-red-500',
+    badge: 'bg-red-500',
+    icon: <AlertCircle className="h-4 w-4" />
+  }
+};
+
+/**
+ * Компонент для отображения бейджа статуса бронирования
+ * Показывает цветной бейдж с названием статуса для визуального различения
+ * разных статусов бронирований
+ */
+const StatusBadge = ({ status }: { status: BookingStatus }) => {
+  const config = statusConfig[status];
+  
+  return (
+    <Badge className={`${config.badge} text-white flex gap-1 items-center`}>
+      {config.icon}
+      {status === 'paid' ? 'Оплачено' : status === 'deposit' ? 'Задаток' : 'Не оплачено'}
+    </Badge>
+  );
+};
+
+/**
+ * Компонент для отображения одного бронирования в списке
+ * Показывает карточку с информацией о бронировании, включая
+ * время, имя клиента, пакет, количество людей и статус
+ */
+const TimeSlot = ({ 
+  booking, 
+  onDelete, 
+  onEdit 
+}: { 
+  booking: Booking; 
+  onDelete: (id: string) => void; 
+  onEdit: (id: string) => void; 
+}) => {
+  const config = statusConfig[booking.status] || statusConfig.unpaid;
+  const endTime = new Date(booking.date.getTime() + booking.duration * 60000);
+  
+  return (
+    <div className={`p-3 rounded-lg border ${config.border} ${config.bg} mb-2`}>
+      <div className="flex justify-between items-start">
+        <div>
+          <div className="flex items-center gap-2 font-semibold text-white">
+            <Clock className="w-4 h-4 text-primary" />
+            <span>
+              {format(booking.date, 'HH:mm')} - {format(endTime, 'HH:mm')}
+            </span>
+            <StatusBadge status={booking.status} />
+          </div>
+          <div className="mt-2">
+            <div className="text-white">{booking.customerName}</div>
+            <div className="text-sm text-muted-foreground flex items-center gap-4 mt-1">
+              <div className="flex items-center gap-1">
+                <Package className="w-3 h-3" />
+                {booking.packageName}
+              </div>
+              <div className="flex items-center gap-1">
+                <Users className="w-3 h-3" />
+                {booking.people} {booking.people === 1 ? 'человек' : 'людей'}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8 hover:bg-background/90"
+            onClick={() => onEdit(booking.id)}
+          >
+            <Edit className="h-4 w-4 text-muted-foreground" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8 hover:bg-background/90"
+            onClick={() => onDelete(booking.id)}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Моковые данные бронирований для демонстрации
 const mockBookings: Booking[] = [
   {
     id: '1',
@@ -127,131 +284,11 @@ const mockBookings: Booking[] = [
   }
 ];
 
-// Определение типов для статусов и бронирований
-type BookingStatus = 'paid' | 'deposit' | 'unpaid';
-
-interface Booking {
-  id: string;
-  customerName: string;
-  packageName: string;
-  date: Date;
-  duration: number;
-  room: string;
-  status: BookingStatus;
-  people: number;
-}
-
-interface StatusConfig {
-  bg: string;
-  border: string;
-  text: string;
-  badge: string;
-  icon: React.ReactNode;
-}
-
-// Определение цветов для статусов
-const statusColors: Record<BookingStatus, StatusConfig> = {
-  paid: {
-    bg: 'bg-green-500/20',
-    border: 'border-green-500',
-    text: 'text-green-500',
-    badge: 'success',
-    icon: <CheckCircle className="h-4 w-4 text-green-500" />
-  },
-  deposit: {
-    bg: 'bg-amber-500/20',
-    border: 'border-amber-500',
-    text: 'text-amber-500',
-    badge: 'warning',
-    icon: <Clock3 className="h-4 w-4 text-amber-500" />
-  },
-  unpaid: {
-    bg: 'bg-red-500/20',
-    border: 'border-red-500',
-    text: 'text-red-500',
-    badge: 'destructive',
-    icon: <AlertCircle className="h-4 w-4 text-red-500" />
-  }
-};
-
-// Компонент для отображения статуса бронирования
-const StatusBadge = ({ status }: { status: BookingStatus }) => {
-  const statusConfig = statusColors[status] || statusColors.unpaid;
-  
-  return (
-    <Badge variant={statusConfig.badge as any} className="flex items-center gap-1">
-      {statusConfig.icon}
-      {status === 'paid' ? 'Оплачено' : status === 'deposit' ? 'Задаток' : 'Не оплачено'}
-    </Badge>
-  );
-};
-
-// Компонент для отображения временного слота
-const TimeSlot = ({ 
-  booking, 
-  onDelete, 
-  onEdit 
-}: { 
-  booking: Booking; 
-  onDelete: (id: string) => void; 
-  onEdit: (id: string) => void; 
-}) => {
-  const statusConfig = statusColors[booking.status] || statusColors.unpaid;
-  const endTime = new Date(booking.date.getTime() + booking.duration * 60000);
-  
-  return (
-    <Card className={cn(
-      "mb-3 overflow-hidden transition-all hover:shadow-md",
-      `border-l-4 ${statusConfig.border}`
-    )}>
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className={cn("font-bold text-lg", statusConfig.text)}>
-                {format(booking.date, 'HH:mm')} - {format(endTime, 'HH:mm')}
-              </span>
-              <StatusBadge status={booking.status} />
-            </div>
-            <h4 className="font-semibold text-foreground">{booking.customerName}</h4>
-            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-              <div className="flex items-center gap-1">
-                <Package className="h-3.5 w-3.5 text-primary" />
-                <span className="text-muted-foreground">Пакет:</span>
-                <span className="font-medium ml-1">{booking.packageName}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5 text-primary" />
-                <span className="text-muted-foreground">Комната:</span>
-                <span className="font-medium ml-1">{booking.room}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5 text-primary" />
-                <span className="text-muted-foreground">Длительность:</span>
-                <span className="font-medium ml-1">{booking.duration} мин</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Users className="h-3.5 w-3.5 text-primary" />
-                <span className="text-muted-foreground">Гостей:</span>
-                <span className="font-medium ml-1">{booking.people}</span>
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-1">
-            <Button variant="ghost" size="icon" onClick={() => onEdit(booking.id)} className="h-8 w-8">
-              <Edit className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => onDelete(booking.id)} className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10">
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
-// Компонент для отображения дня в календаре
+/**
+ * Компонент для отображения одного дня в календаре
+ * Показывает ячейку с номером дня и индикаторами наличия бронирований
+ * с разными статусами (если есть)
+ */
 const CalendarDay = ({ 
   day, 
   bookings, 
@@ -302,10 +339,21 @@ const CalendarDay = ({
   );
 };
 
-// Исправляем тип для объекта с группировкой бронирований по комнатам
+/**
+ * Тип для группировки бронирований по комнатам
+ * Ключ - название комнаты, значение - массив бронирований в этой комнате
+ */
 type BookingsByRoom = Record<string, Booking[]>;
 
-// Функция для группировки бронирований по комнатам
+/**
+ * Функция для группировки бронирований по комнатам
+ * Преобразует массив бронирований в объект, где ключами
+ * являются названия комнат, а значениями - массивы бронирований
+ * в соответствующих комнатах
+ * 
+ * @param bookings Массив бронирований
+ * @returns Объект с бронированиями, сгруппированными по комнатам
+ */
 const groupBookingsByRoom = (bookings: Booking[]): BookingsByRoom => {
   return bookings.reduce<BookingsByRoom>((acc, booking) => {
     if (!acc[booking.room]) {
@@ -316,7 +364,10 @@ const groupBookingsByRoom = (bookings: Booking[]): BookingsByRoom => {
   }, {});
 };
 
-// Функция для отображения всех бронирований
+/**
+ * Компонент для отображения всех бронирований в виде списка
+ * Используется во вкладке "Все бронирования"
+ */
 const AllBookingsView = ({ 
   bookings, 
   onDelete, 
@@ -351,7 +402,10 @@ const AllBookingsView = ({
   );
 };
 
-// Функция для отображения бронирований по комнатам
+/**
+ * Компонент для отображения бронирований, сгруппированных по комнатам
+ * Используется во вкладке "По комнатам"
+ */
 const RoomBookingsView = ({ 
   bookingsByRoom, 
   onDelete, 
@@ -396,7 +450,13 @@ const RoomBookingsView = ({
   );
 };
 
-// Функция для получения правильного склонения слова "бронирование"
+/**
+ * Функция для получения правильного склонения слова "бронирование"
+ * в зависимости от числа
+ * 
+ * @param count Количество бронирований
+ * @returns Правильная форма слова "бронирование"
+ */
 function getBookingCountText(count: number): string {
   // Определяем последнюю цифру числа
   const lastDigit = count % 10;
@@ -414,33 +474,91 @@ function getBookingCountText(count: number): string {
   }
 }
 
+/**
+ * Основной компонент страницы календаря бронирований
+ * Управляет состоянием календаря, фильтрует и отображает бронирования,
+ * предоставляет интерфейс для взаимодействия пользователя с календарем
+ * и списком бронирований
+ * 
+ * @returns React компонент страницы администратора с календарем бронирований
+ */
 export default function BookingCalendarPage() {
+  // Состояние для текущего отображаемого месяца
   const [date, setDate] = useState<Date>(new Date());
+  // Режим отображения календаря - месяц или день
   const [view, setView] = useState<'month' | 'day'>('month');
+  // Выбранная дата для отображения бронирований
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
+  // Хук для показа уведомлений
   const { toast } = useToast();
 
   // Фильтрация бронирований для текущего месяца
+  // Используется для отображения меток на календаре и для просмотра бронирований по месяцам
   const bookingsForMonth = mockBookings.filter(booking => 
     booking.date.getMonth() === date.getMonth() && 
     booking.date.getFullYear() === date.getFullYear()
   );
 
   // Фильтрация бронирований для выбранного дня
+  // Используется для отображения списка бронирований
   const bookingsForSelectedDay = mockBookings.filter(booking => 
     isSameDay(booking.date, selectedDay)
   );
 
-  // Группировка бронирований по комнатам
+  // Группировка бронирований по комнатам для выбранного дня
+  // Используется для отображения во вкладке "По комнатам" при дневном просмотре
   const bookingsByRoom = groupBookingsByRoom(bookingsForSelectedDay);
+  
+  // Группировка бронирований по комнатам для целого месяца
+  // Используется для отображения во вкладке "По комнатам" при месячном просмотре
+  const bookingsByRoomMonth = groupBookingsByRoom(bookingsForMonth);
+  
+  // Состояние для выбранной вкладки в правой панели
+  const [activeTab, setActiveTab] = useState<'all' | 'rooms'>('all');
 
   // Статистика для выбранного дня
+  // Используется для отображения сводной информации
   const totalGuests = bookingsForSelectedDay.reduce((sum, booking) => sum + booking.people, 0);
   const paidBookings = bookingsForSelectedDay.filter(b => b.status === 'paid').length;
   const unpaidBookings = bookingsForSelectedDay.filter(b => b.status === 'unpaid').length;
   const depositBookings = bookingsForSelectedDay.filter(b => b.status === 'deposit').length;
 
-  // Обработчик удаления бронирования
+  // Состояние для фильтрации комнат
+  const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
+
+  // Получаем список уникальных комнат
+  const uniqueRooms = useMemo(() => {
+    const rooms = new Set<string>();
+    mockBookings.forEach(booking => {
+      rooms.add(booking.room);
+    });
+    return Array.from(rooms);
+  }, []);
+
+  // Фильтрованные бронирования по месяцу с учетом выбранной комнаты
+  const filteredBookingsForMonth = useMemo(() => {
+    if (!selectedRoom) {
+      return bookingsForMonth;
+    }
+    return bookingsForMonth.filter(booking => booking.room === selectedRoom);
+  }, [bookingsForMonth, selectedRoom]);
+
+  // Группировка отфильтрованных бронирований по комнатам для месяца
+  const filteredBookingsByRoomMonth = useMemo(() => {
+    if (selectedRoom) {
+      // Если выбрана конкретная комната, возвращаем только ее бронирования
+      const filtered = bookingsForMonth.filter(booking => booking.room === selectedRoom);
+      return { [selectedRoom]: filtered };
+    }
+    return bookingsByRoomMonth;
+  }, [bookingsForMonth, bookingsByRoomMonth, selectedRoom]);
+
+  /**
+   * Обработчик удаления бронирования
+   * В демо версии просто показывает уведомление
+   * 
+   * @param id Идентификатор удаляемого бронирования
+   */
   const handleDeleteBooking = (id: string) => {
     // В реальном приложении здесь будет API-запрос
     // В демо просто показываем уведомление
@@ -450,7 +568,12 @@ export default function BookingCalendarPage() {
     });
   };
 
-  // Обработчик редактирования бронирования
+  /**
+   * Обработчик редактирования бронирования
+   * В демо версии просто показывает уведомление
+   * 
+   * @param id Идентификатор редактируемого бронирования
+   */
   const handleEditBooking = (id: string) => {
     // В реальном приложении здесь будет редирект на страницу редактирования
     // В демо просто показываем уведомление
@@ -460,6 +583,10 @@ export default function BookingCalendarPage() {
     });
   };
 
+  /**
+   * Обработчик добавления нового бронирования
+   * В демо версии просто показывает уведомление
+   */
   const handleAddBooking = () => {
     toast({
       title: "Новое бронирование",
@@ -467,21 +594,34 @@ export default function BookingCalendarPage() {
     });
   };
 
-  // Навигация по месяцам
+  /**
+   * Переход к предыдущему месяцу в календаре
+   */
   const prevMonth = () => {
     setDate(prevDate => addMonths(prevDate, -1));
   };
 
+  /**
+   * Переход к следующему месяцу в календаре
+   */
   const nextMonth = () => {
     setDate(prevDate => addMonths(prevDate, 1));
   };
 
+  /**
+   * Переход к текущей дате в календаре
+   */
   const goToToday = () => {
     setDate(new Date());
     setSelectedDay(new Date());
   };
 
-  // Генерирует массив дней для текущего месяца с соответствующими бронированиями
+  /**
+   * Генерирует массив дней для текущего месяца с бронированиями
+   * Используется для отображения календаря месяца
+   * 
+   * @returns Массив объектов с датой и бронированиями для нее
+   */
   const generateDaysForMonth = () => {
     return Array.from({ length: new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate() }, (_, i) => {
       const day = new Date(date.getFullYear(), date.getMonth(), i + 1);
@@ -492,8 +632,128 @@ export default function BookingCalendarPage() {
     });
   };
 
+  /**
+   * Компонент для отображения бронирований по комнатам за месяц
+   * Используется во вкладке "По комнатам" при месячном просмотре
+   */
+  const MonthlyRoomBookingsView = ({ 
+    bookingsByRoom, 
+    onDelete, 
+    onEdit,
+    onDaySelect
+  }: { 
+    bookingsByRoom: BookingsByRoom; 
+    onDelete: (id: string) => void; 
+    onEdit: (id: string) => void;
+    onDaySelect: (date: Date) => void;
+  }) => {
+    if (Object.keys(bookingsByRoom).length === 0) {
+      return (
+        <div className="text-center py-8 bg-card/30 rounded-lg border border-dashed border-border">
+          <MapPin className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
+          <h3 className="text-xl font-semibold text-muted-foreground">
+            Нет бронирований на этот месяц
+          </h3>
+        </div>
+      );
+    }
+
+    // Функция для группировки бронирований по дням
+    const groupBookingsByDay = (bookings: Booking[]) => {
+      return bookings.reduce<Record<string, Booking[]>>((acc, booking) => {
+        const dayKey = format(booking.date, 'yyyy-MM-dd');
+        if (!acc[dayKey]) {
+          acc[dayKey] = [];
+        }
+        acc[dayKey].push(booking);
+        return acc;
+      }, {});
+    };
+
+    return (
+      <div className="space-y-6">
+        {Object.entries(bookingsByRoom).map(([room, roomBookings]) => {
+          // Группируем бронирования по дням
+          const bookingsByDay = groupBookingsByDay(roomBookings);
+          
+          return (
+            <div key={room}>
+              <h3 className="text-lg font-semibold mb-3 flex items-center text-white">
+                <MapPin className="h-4 w-4 mr-1.5 text-primary" />
+                {room} <span className="text-muted-foreground ml-2 text-sm">({roomBookings.length} бронирований)</span>
+              </h3>
+              
+              <div className="space-y-4">
+                {Object.entries(bookingsByDay).map(([dayKey, dayBookings]) => {
+                  const dayDate = new Date(dayKey);
+                  
+                  return (
+                    <div key={dayKey} className="bg-card/30 border border-border rounded-lg p-3">
+                      <div 
+                        className="flex items-center mb-2 cursor-pointer hover:text-primary transition-colors"
+                        onClick={() => onDaySelect(dayDate)}
+                      >
+                        <CalendarIcon className="h-4 w-4 mr-1.5" />
+                        <span className="font-medium">{format(dayDate, 'd MMMM (EEEE)', { locale: pl })}</span>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        {dayBookings
+                          .sort((a, b) => a.date.getTime() - b.date.getTime())
+                          .map(booking => (
+                            <TimeSlot 
+                              key={booking.id} 
+                              booking={booking} 
+                              onDelete={onDelete}
+                              onEdit={onEdit}
+                            />
+                          ))
+                        }
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Компонент фильтра комнат
+  const RoomFilter = () => {
+    return (
+      <div className="flex items-center space-x-2 mb-3">
+        <div className="text-sm text-muted-foreground">Фильтр комнат:</div>
+        <select 
+          className="bg-card border border-border rounded-md p-1 text-sm outline-none focus:ring-1 focus:ring-primary"
+          value={selectedRoom || ''}
+          onChange={(e) => setSelectedRoom(e.target.value || null)}
+        >
+          <option value="">Все комнаты</option>
+          {uniqueRooms.map(room => (
+            <option key={room} value={room}>{room}</option>
+          ))}
+        </select>
+        {selectedRoom && (
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-7 px-2" 
+            onClick={() => setSelectedRoom(null)}
+          >
+            <X className="h-3 w-3 mr-1" />
+            Сбросить
+          </Button>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6 p-6">
+      {/* Заголовок и кнопки управления */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Календарь бронирований</h2>
@@ -516,7 +776,9 @@ export default function BookingCalendarPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Левая колонка - календарь и статистика */}
         <div className="lg:col-span-1">
+          {/* Календарь */}
           <Card className="border-primary/20 shadow-lg overflow-hidden">
             <CardHeader className="bg-card pb-2 border-b border-border">
               <div className="flex justify-between items-center">
@@ -533,7 +795,9 @@ export default function BookingCalendarPage() {
                 </div>
               </div>
             </CardHeader>
+            {/* Содержимое календаря */}
             <CardContent className="p-4">
+              {/* Заголовки дней недели */}
               <div className="grid grid-cols-7 gap-1 mb-2">
                 {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day, index) => (
                   <div key={index} className="text-center text-xs font-medium text-muted-foreground">
@@ -541,6 +805,7 @@ export default function BookingCalendarPage() {
                   </div>
                 ))}
               </div>
+              {/* Сетка дней месяца */}
               <div className="grid grid-cols-7 gap-1">
                 {generateDaysForMonth().map(({ day, bookings }, index) => {
                   const dayOfWeek = day.getDay();
@@ -575,6 +840,7 @@ export default function BookingCalendarPage() {
                 })}
               </div>
             </CardContent>
+            {/* Легенда календаря */}
             <CardFooter className="bg-card/50 border-t border-border p-4">
               <div className="w-full grid grid-cols-3 gap-2">
                 <div className="flex items-center gap-2">
@@ -593,6 +859,7 @@ export default function BookingCalendarPage() {
             </CardFooter>
           </Card>
           
+          {/* Статистика для выбранного дня */}
           <Card className="mt-6 border-primary/20 shadow-lg">
             <CardHeader className="bg-card pb-2 border-b border-border">
               <CardTitle className="text-lg font-bold text-white flex items-center">
@@ -601,6 +868,7 @@ export default function BookingCalendarPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4">
+              {/* Основные показатели */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-card/50 rounded-lg p-3 border border-border">
                   <div className="text-muted-foreground text-xs mb-1">Всего бронирований</div>
@@ -619,6 +887,7 @@ export default function BookingCalendarPage() {
                   <div className="text-2xl font-bold text-red-500">{unpaidBookings}</div>
                 </div>
               </div>
+              {/* Визуализация распределения по статусам */}
               {bookingsForSelectedDay.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-border">
                   <div className="text-sm font-semibold text-white mb-2">Распределение по статусам</div>
@@ -658,13 +927,18 @@ export default function BookingCalendarPage() {
           </Card>
         </div>
         
+        {/* Правая колонка - список бронирований */}
         <div className="lg:col-span-2">
           <Card className="border-primary/20 shadow-lg">
             <CardHeader className="bg-card pb-2 border-b border-border">
               <div className="flex justify-between items-center">
                 <CardTitle className="text-xl font-bold text-white flex items-center">
                   <CalendarIcon className="mr-2 h-5 w-5 text-primary" />
-                  {selectedDay ? (
+                  {view === 'month' ? (
+                    <span>
+                      Бронирования за {format(date, 'LLLL yyyy', { locale: pl })}
+                    </span>
+                  ) : selectedDay ? (
                     <span>
                       Бронирования на {format(selectedDay, 'd MMMM yyyy', { locale: pl })}
                     </span>
@@ -678,51 +952,138 @@ export default function BookingCalendarPage() {
                 </Button>
               </div>
             </CardHeader>
-            <Tabs defaultValue="all" className="w-full">
+            {/* Вкладки для переключения между видами бронирований */}
+            <Tabs defaultValue="all" className="w-full" value={activeTab} onValueChange={(value) => setActiveTab(value as 'all' | 'rooms')}>
               <div className="px-4 pt-2">
                 <TabsList className="bg-card/50 border border-border w-full grid grid-cols-2">
-                  <TabsTrigger value="all" className="text-xs data-[state=active]:bg-primary data-[state=active]:text-white">
-                    Все бронирования
+                  <TabsTrigger 
+                    value="all" 
+                    className="text-xs data-[state=active]:bg-primary data-[state=active]:text-white"
+                  >
+                    {view === 'month' ? 'Все за месяц' : 'Все на день'}
                   </TabsTrigger>
-                  <TabsTrigger value="rooms" className="text-xs data-[state=active]:bg-primary data-[state=active]:text-white">
-                    По комнатам
+                  <TabsTrigger 
+                    value="rooms" 
+                    className="text-xs data-[state=active]:bg-primary data-[state=active]:text-white"
+                  >
+                    {view === 'month' ? 'По комнатам за месяц' : 'По комнатам на день'}
                   </TabsTrigger>
                 </TabsList>
               </div>
               
               <CardContent className="p-4">
+                {/* Содержимое вкладки "Все бронирования" */}
                 <TabsContent value="all" className="mt-0">
-                  <AllBookingsView 
-                    bookings={bookingsForSelectedDay}
-                    onDelete={handleDeleteBooking}
-                    onEdit={handleEditBooking}
-                  />
+                  {view === 'month' ? (
+                    // Отображение всех бронирований за месяц
+                    <div className="space-y-4">
+                      <RoomFilter />
+                      
+                      {filteredBookingsForMonth.length > 0 ? (
+                        Array.from({ length: new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate() }, (_, i) => {
+                          const day = new Date(date.getFullYear(), date.getMonth(), i + 1);
+                          const bookingsForDay = filteredBookingsForMonth.filter(booking => 
+                            isSameDay(booking.date, day)
+                          );
+                          
+                          // Пропускаем дни без бронирований
+                          if (bookingsForDay.length === 0) return null;
+                          
+                          return (
+                            <div key={day.toString()} className="bg-card/30 border border-border rounded-lg p-3">
+                              <div 
+                                className="flex items-center mb-2 cursor-pointer hover:text-primary transition-colors"
+                                onClick={() => {
+                                  setSelectedDay(day);
+                                  setView('day');
+                                }}
+                              >
+                                <CalendarIcon className="h-4 w-4 mr-1.5" />
+                                <span className="font-medium">{format(day, 'd MMMM (EEEE)', { locale: pl })}</span>
+                                <Badge variant="outline" className="ml-2">
+                                  {bookingsForDay.length} {getBookingCountText(bookingsForDay.length)}
+                                </Badge>
+                              </div>
+                              
+                              <div className="space-y-2">
+                                {bookingsForDay
+                                  .sort((a, b) => a.date.getTime() - b.date.getTime())
+                                  .map(booking => (
+                                    <TimeSlot 
+                                      key={booking.id} 
+                                      booking={booking} 
+                                      onDelete={handleDeleteBooking}
+                                      onEdit={handleEditBooking}
+                                    />
+                                  ))
+                                }
+                              </div>
+                            </div>
+                          );
+                        }).filter(Boolean)
+                      ) : (
+                        <div className="text-center py-8 bg-card/30 rounded-lg border border-dashed border-border">
+                          <CalendarIcon className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
+                          <h3 className="text-xl font-semibold text-muted-foreground">
+                            {selectedRoom 
+                              ? `Нет бронирований для комнаты "${selectedRoom}" за этот месяц` 
+                              : 'Нет бронирований за этот месяц'
+                            }
+                          </h3>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    // Отображение бронирований на выбранный день
+                    <AllBookingsView 
+                      bookings={bookingsForSelectedDay}
+                      onDelete={handleDeleteBooking}
+                      onEdit={handleEditBooking}
+                    />
+                  )}
                 </TabsContent>
                 
+                {/* Содержимое вкладки "По комнатам" */}
                 <TabsContent value="rooms" className="mt-0">
-                  <RoomBookingsView 
-                    bookingsByRoom={bookingsByRoom}
-                    onDelete={handleDeleteBooking}
-                    onEdit={handleEditBooking}
-                  />
+                  {view === 'month' ? (
+                    // Отображение бронирований по комнатам за месяц
+                    <div className="space-y-4">
+                      <RoomFilter />
+                      
+                      <MonthlyRoomBookingsView 
+                        bookingsByRoom={filteredBookingsByRoomMonth}
+                        onDelete={handleDeleteBooking}
+                        onEdit={handleEditBooking}
+                        onDaySelect={(day) => {
+                          setSelectedDay(day);
+                          setView('day');
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    // Отображение бронирований по комнатам на выбранный день
+                    <RoomBookingsView 
+                      bookingsByRoom={bookingsByRoom}
+                      onDelete={handleDeleteBooking}
+                      onEdit={handleEditBooking}
+                    />
+                  )}
                 </TabsContent>
               </CardContent>
             </Tabs>
+            {/* Футер с информацией и кнопкой добавления */}
             <CardFooter className="bg-card/50 border-t border-border p-4 flex justify-between">
               <div className="text-sm text-muted-foreground">
-                {bookingsForSelectedDay.length > 0 
-                  ? `${bookingsForSelectedDay.length} ${getBookingCountText(bookingsForSelectedDay.length)} на ${format(selectedDay, 'd MMMM', { locale: pl })}`
-                  : 'Нет бронирований на выбранную дату'
-                }
+                {view === 'month' ? (
+                  bookingsForMonth.length > 0 
+                    ? `${bookingsForMonth.length} ${getBookingCountText(bookingsForMonth.length)} за ${format(date, 'LLLL yyyy', { locale: pl })}`
+                    : 'Нет бронирований за выбранный месяц'
+                ) : (
+                  bookingsForSelectedDay.length > 0 
+                    ? `${bookingsForSelectedDay.length} ${getBookingCountText(bookingsForSelectedDay.length)} на ${format(selectedDay, 'd MMMM', { locale: pl })}`
+                    : 'Нет бронирований на выбранную дату'
+                )}
               </div>
-              <Button 
-                variant="default" 
-                className="bg-primary hover:bg-primary/90 text-white"
-                onClick={handleAddBooking}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Добавить бронирование
-              </Button>
             </CardFooter>
           </Card>
         </div>
@@ -731,7 +1092,13 @@ export default function BookingCalendarPage() {
   );
 }
 
-// Компонент иконки пакета
+/**
+ * Компонент иконки пакета
+ * Svg иконка для отображения пакетов в интерфейсе
+ * 
+ * @param props Свойства SVG элемента
+ * @returns SVG элемент иконки пакета
+ */
 function Package(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

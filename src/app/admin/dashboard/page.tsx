@@ -266,9 +266,9 @@ export default function DashboardPage() {
           <CardContent>
             <div className="flex justify-between items-center">
               <div className="space-y-4">
-                <div className="flex items-center gap-2">
+                <div className="pt-6 flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                  <div className="text-sm text-[#e0e0e0]">Оплачено</div>
+                  <div className=" text-sm text-[#e0e0e0]">Оплачено</div>
                   <div className="text-sm font-medium text-[#e0e0e0] ml-auto">65%</div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -282,10 +282,10 @@ export default function DashboardPage() {
                   <div className="text-sm font-medium text-[#e0e0e0] ml-auto">10%</div>
                 </div>
               </div>
-              <div className="relative w-24 h-24">
-                <div className="absolute inset-0 rounded-full border-8 border-green-500" style={{ clipPath: 'polygon(50% 50%, 100% 50%, 100% 0, 0 0, 0 100%, 100% 100%, 100% 50%)' }}></div>
+              <div className="mt-6 relative w-24 h-24">
+                <div className=" absolute inset-0 rounded-full border-8 border-green-500" style={{ clipPath: 'polygon(50% 50%, 100% 50%, 100% 0, 0 0, 0 100%, 100% 100%, 100% 50%)' }}></div>
                 <div className="absolute inset-0 rounded-full border-8 border-yellow-500" style={{ clipPath: 'polygon(50% 50%, 100% 50%, 100% 0, 65% 0, 50% 50%)' }}></div>
-                <div className="absolute inset-0 rounded-full border-8 border-red-500" style={{ clipPath: 'polygon(50% 50%, 65% 0, 100% 0, 100% 0, 90% 0, 50% 50%)' }}></div>
+                <div className="bg-red-500 absolute inset-0 rounded-full border-8 border-red-500" style={{ clipPath: 'polygon(50% 50%, 65% 0, 100% 0, 100% 0, 90% 0, 50% 50%)' }}></div>
               </div>
             </div>
           </CardContent>
@@ -301,7 +301,7 @@ export default function DashboardPage() {
           <CardContent>
             {/* График активности бронирований */}
             <div className="space-y-4">
-              <div className="flex justify-between items-center mb-2">
+              <div className="mt-6 flex justify-between items-center mb-2">
                 <div className="text-sm text-[#e0e0e0] font-medium">Активность бронирований</div>
                 <div className="text-sm text-[#f36e21] font-medium">+23% с прошлого месяца</div>
               </div>

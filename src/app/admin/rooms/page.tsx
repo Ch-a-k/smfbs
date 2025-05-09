@@ -33,6 +33,13 @@ const mockRooms = [
     capacity: 2,
     isActive: false,
     description: 'Маленькая комната для пар'
+  },
+  {
+    id: '4',
+    name: 'Комната 4',
+    capacity: 2,
+    isActive: true,
+    description: 'Большая комната для компаний>'
   }
 ];
 
@@ -156,12 +163,12 @@ export default function RoomsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {rooms.map(room => (
-          <Card key={room.id} className={!room.isActive ? "opacity-60" : ""}>
+          <Card key={room.id} className={!room.isActive ? "bg-[#000]" : ""}>
             <CardHeader className="flex flex-row items-start justify-between space-y-0 bg-muted/30">
               <div>
                 <CardTitle className="flex items-center text-primary">
                   {room.name}
-                  {!room.isActive && <Badge variant="secondary" className="ml-2">Неактивна</Badge>}
+                  {!room.isActive && <Badge variant="secondary" className="bg-[#610000] text-sm ml-2 animate-pulse">Неактивна</Badge>}
                 </CardTitle>
                 <div className="flex items-center mt-1 text-muted-foreground">
                   <Users className="h-4 w-4 mr-1 text-primary" />
