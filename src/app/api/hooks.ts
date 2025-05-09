@@ -93,16 +93,34 @@ export function useBookingMutations() {
     setError(null);
     setSuccess(false);
     try {
-      // Подготавливаем данные
+      console.log('useBookingMutations.create: Получены данные для создания бронирования:', bookingData);
+      console.log('useBookingMutations.create: Статус оплаты:', paymentStatus);
+      
+      // Проверка обязательных полей
+      if (!bookingData.packageId) {
+        throw new Error('Не указан ID пакета');
+      }
+      
+      if (!bookingData.roomId) {
+        throw new Error('Не указана комната');
+      }
+      
+      if (!bookingData.date) {
+        throw new Error('Не указана дата');
+      }
+      
+      // Обработка данных
       const bookingToCreate = {
         ...bookingData,
-        customerName: bookingData.name,
-        customerEmail: bookingData.email,
-        customerPhone: bookingData.phone,
-        numPeople: bookingData.numberOfPeople,
-        totalPrice: bookingData.totalAmount,
+        customerName: bookingData.name || bookingData.customerName,
+        customerEmail: bookingData.email || bookingData.customerEmail,
+        customerPhone: bookingData.phone || bookingData.customerPhone,
+        numPeople: bookingData.numberOfPeople || bookingData.numPeople,
+        totalPrice: bookingData.totalAmount || bookingData.totalPrice,
         booking_date: bookingData.date,
+        // Преобразуем строковые значения в числовые
         roomId: typeof bookingData.roomId === 'string' ? parseInt(bookingData.roomId, 10) : bookingData.roomId,
+        packageId: typeof bookingData.packageId === 'string' ? parseInt(bookingData.packageId, 10) : bookingData.packageId,
         numberOfPeople: typeof bookingData.numberOfPeople === 'string' 
           ? parseInt(bookingData.numberOfPeople, 10) 
           : bookingData.numberOfPeople,
@@ -118,13 +136,22 @@ export function useBookingMutations() {
         paymentStatus
       };
 
+      console.log('useBookingMutations.create: Подготовленные данные для создания бронирования:', bookingToCreate);
+      
       // Имитируем задержку сети
       await new Promise(resolve => setTimeout(resolve, 500));
-      const result = await mockCreateBooking(bookingToCreate);
-      setSuccess(true);
-      return result;
+      
+      try {
+        const result = await mockCreateBooking(bookingToCreate);
+        console.log('useBookingMutations.create: Успешный ответ от сервера:', result);
+        setSuccess(true);
+        return result;
+      } catch (innerError) {
+        console.error('useBookingMutations.create: Ошибка при вызове mockCreateBooking:', innerError);
+        throw innerError;
+      }
     } catch (err) {
-      console.error('Error creating booking:', err);
+      console.error('useBookingMutations.create: Ошибка создания бронирования:', err);
       setError('Не удалось создать бронирование. Пожалуйста, попробуйте позже.');
       throw err;
     } finally {

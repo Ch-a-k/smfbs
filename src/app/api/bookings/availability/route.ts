@@ -21,15 +21,15 @@ export async function GET(request: NextRequest) {
     }
     
     // Проверяем существование пакета
-    const pkg = await getPackageById(packageId);
-    if (!pkg) {
+      const pkg = await getPackageById(packageId);
+      if (!pkg) {
       return NextResponse.json({ error: 'Пакет не найден' }, { status: 404 });
     }
     
     // Получаем доступные временные слоты для выбранной даты и пакета
     const timeSlots = await getAvailableTimeSlots(date, packageId);
     
-    return NextResponse.json({
+      return NextResponse.json({
       date,
       packageId,
       timeSlots

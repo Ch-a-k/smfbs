@@ -89,7 +89,7 @@ export default function LoginPage() {
           
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
-              <label htmlFor="username" className="sr-only">
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
                 Nazwa użytkownika
               </label>
               <input
@@ -98,14 +98,16 @@ export default function LoginPage() {
                 type="text"
                 autoComplete="username"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-[#f36e21] focus:border-[#f36e21] focus:z-10 sm:text-sm"
+                aria-label="Nazwa użytkownika"
+                aria-required="true"
+                className="appearance-none rounded-t-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-[#f36e21] focus:border-[#f36e21] focus:z-10 sm:text-sm"
                 placeholder="Nazwa użytkownika"
                 value={credentials.username}
                 onChange={handleChange}
               />
             </div>
             <div>
-              <label htmlFor="password" className="sr-only">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mt-3 mb-1">
                 Hasło
               </label>
               <input
@@ -114,7 +116,9 @@ export default function LoginPage() {
                 type="password"
                 autoComplete="current-password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-[#f36e21] focus:border-[#f36e21] focus:z-10 sm:text-sm"
+                aria-label="Hasło"
+                aria-required="true"
+                className="appearance-none rounded-b-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-[#f36e21] focus:border-[#f36e21] focus:z-10 sm:text-sm"
                 placeholder="Hasło"
                 value={credentials.password}
                 onChange={handleChange}

@@ -14,24 +14,32 @@ export const en = {
   booking: {
     title: 'Booking',
     steps: {
-      date: 'Date & Time',
+      date: 'Date',
+      time: 'Time',
       contact: 'Contact',
+      extras: 'Add-ons',
       payment: 'Payment'
     },
     date: {
-      title: 'Select a date and time',
-      selectDate: 'Select a date',
-      selectTime: 'Select a time slot',
-      noTimeSlots: 'No available time slots for this date',
-      loading: 'Loading available times...',
-      durationLabel: 'Duration:',
-      availability: {
-        available: 'Available',
-        unavailable: 'Unavailable'
-      }
+      title: 'Select a date',
+      subtitle: 'Choose a date for your visit',
+      selected: 'Selected date',
+      duration: 'Duration',
+      minutes: 'minutes'
+    },
+    time: {
+      title: 'Select a time',
+      subtitle: 'Choose the time for your visit',
+      selectTime: 'Select time slot',
+      selected: 'Selected time',
+      to: 'to',
+      noAvailableSlots: 'No available time slots for this date',
+      durationInfo: 'Session duration',
+      minutes: 'minutes'
     },
     contact: {
       title: 'Enter your contact information',
+      subtitle: 'Please provide your contact details so we can confirm your booking',
       name: 'Full Name',
       namePlaceholder: 'Enter your full name',
       email: 'Email',
@@ -39,6 +47,7 @@ export const en = {
       phone: 'Phone',
       phonePlaceholder: 'Enter your phone number',
       numberOfPeople: 'Number of People',
+      persons: 'persons',
       promoCode: 'Promo Code (optional)',
       promoCodePlaceholder: 'Enter promo code if you have one',
       comment: 'Comments (optional)',
@@ -58,8 +67,11 @@ export const en = {
       fullPayment: 'Full Payment',
       fullPaymentDesc: 'Pay the full amount now',
       depositPayment: 'Deposit Only',
-      depositPaymentDesc: 'Pay minimum deposit now, rest on arrival',
-      provider: 'Secure payment processed by Przelewy24'
+      depositPaymentDesc: 'Pay minimum deposit now, the rest upon arrival',
+      provider: 'Secure payment processed by Przelewy24',
+      confirmation: 'Booking Confirmation',
+      processingPayment: 'Processing your payment...',
+      returnToSite: 'Return to site'
     },
     calendar: {
       monthNames: 'January_February_March_April_May_June_July_August_September_October_November_December',
@@ -70,8 +82,13 @@ export const en = {
     },
     crossSell: {
       title: 'Additional Items',
-      description: 'Enhance your experience with these additional items. Select the ones you want to add to your booking.',
-      add: 'Add to Booking'
+      description: 'Enhance your experience with additional items. Select those you want to add to your booking.'
+    },
+    extras: {
+      title: 'Add extra items',
+      subtitle: 'Optional items to improve your experience',
+      selected: 'Selected items',
+      total: 'Total for extra items'
     },
     validation: {
       dateRequired: 'Please select a date',
@@ -89,10 +106,18 @@ export const en = {
       processing: 'Processing...'
     },
     success: {
-      message: 'Your booking has been successfully submitted! You will receive a confirmation email shortly.'
+      title: 'Booking Successful!',
+      message: 'Your booking has been successfully completed!',
+      reference: 'Your booking reference number',
+      emailSent: 'We\'ve sent a confirmation email to your address',
+      detailsFollowing: 'with all the details of your booking.',
+      thanks: 'Thank you for choosing us, we look forward to seeing you!',
+      questions: 'If you have any questions, please contact us.'
     },
     error: {
-      message: 'There was an error submitting your booking. Please try again.'
+      title: 'Booking Error',
+      message: 'There was an error processing your booking. Please try again.',
+      contact: 'If the problem persists, please contact our support.'
     }
   },
   nav: {

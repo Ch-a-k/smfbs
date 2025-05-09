@@ -25,7 +25,7 @@ declare global {
 
 // Инициализация Google Analytics
 export const pageview = (url: string): void => {
-  if (!window.gtag) return;
+  if (typeof window === 'undefined' || !window.gtag) return;
   
   window.gtag('config', process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID as string, {
     page_path: url,
@@ -34,7 +34,7 @@ export const pageview = (url: string): void => {
 
 // Отправка события в Google Analytics
 export const event = ({ action, category, label, value, non_interaction }: GTagEvent): void => {
-  if (!window.gtag) return;
+  if (typeof window === 'undefined' || !window.gtag) return;
   
   window.gtag('event', action, {
     event_category: category,
@@ -46,6 +46,8 @@ export const event = ({ action, category, label, value, non_interaction }: GTagE
 
 // Проверяет, разрешена ли аналитика в настройках куки
 export const isAnalyticsAllowed = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  
   try {
     const consent = localStorage.getItem('cookieConsent');
     if (!consent) return false;
@@ -60,6 +62,8 @@ export const isAnalyticsAllowed = (): boolean => {
 
 // Проверяет, разрешены ли маркетинговые файлы cookie в настройках
 export const isMarketingAllowed = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  
   try {
     const consent = localStorage.getItem('cookieConsent');
     if (!consent) return false;
@@ -74,6 +78,8 @@ export const isMarketingAllowed = (): boolean => {
 
 // Трекинг событий на основе пользовательского согласия
 export const trackEvent = (eventParams: GTagEvent): void => {
+  if (typeof window === 'undefined') return;
+  
   if (isAnalyticsAllowed()) {
     event(eventParams);
   }
@@ -81,7 +87,9 @@ export const trackEvent = (eventParams: GTagEvent): void => {
 
 // Трекинг просмотра страницы на основе пользовательского согласия
 export const trackPageview = (url: string): void => {
+  if (typeof window === 'undefined') return;
+  
   if (isAnalyticsAllowed()) {
     pageview(url);
   }
-}; 
+};

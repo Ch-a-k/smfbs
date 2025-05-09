@@ -1,142 +1,133 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, AuthContextType, LoginCredentials, AuthState } from '@/types/auth';
-import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
+import { createContext, useContext, useState, useEffect } from 'react';
+import { LoginCredentials, User } from '@/types/auth';
 
-// Mock user data
-const MOCK_USERS = [
-  {
-    id: '1',
-    username: 'admin',
-    password: 'admin123',
-    role: 'admin' as const,
-    name: 'Администратор',
-  },
-  {
-    id: '2',
-    username: 'user',
-    password: 'user123',
-    role: 'user' as const,
-    name: 'Пользователь',
-  },
-];
+interface AuthContextType {
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  currentUser: User | null;
+  isSuperAdmin: boolean;
+  login: (credentials: LoginCredentials) => Promise<boolean>;
+  logout: () => Promise<void>;
+}
 
-// Начальное состояние
-const initialState: AuthState = {
-  user: null,
-  isAuthenticated: false,
-  isLoading: true,
-  error: null,
-};
-
-// Создаем контекст аутентификации
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Провайдер для контекста аутентификации
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<AuthState>(initialState);
-  const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  // Проверяем статус аутентификации при загрузке
+  // Проверяем, авторизован ли пользователь при загрузке
   useEffect(() => {
-    const checkAuthStatus = async () => {
-      try {
-        const userCookie = Cookies.get('user');
+    const checkAuth = () => {
+      const userCookie = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('user='));
+      
+      if (userCookie) {
+        const username = userCookie.split('=')[1];
         
-        if (userCookie) {
-          const userData = JSON.parse(userCookie);
-          setState({
-            user: userData,
-            isAuthenticated: true,
-            isLoading: false,
-            error: null,
+        // Устанавливаем базовую аутентификацию
+        setIsAuthenticated(true);
+        
+        // Если это суперадмин
+        if (username === 'admin') {
+          setIsSuperAdmin(true);
+          setCurrentUser({
+            id: '1',
+            username: 'admin',
+            role: 'admin',
+            name: 'Администратор'
           });
         } else {
-          setState(prev => ({ ...prev, isLoading: false }));
+          // В реальном приложении здесь был бы запрос к API для получения данных пользователя
+          // по сохраненному токену
+          fetch(`/api/users?username=${username}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data && data.length > 0) {
+                const user = data[0];
+                setCurrentUser(user);
+                setIsSuperAdmin(user.username === 'admin');
+              }
+            })
+            .catch(err => {
+              console.error('Error fetching user data:', err);
+            });
         }
-      } catch (error) {
-        console.error('Error checking auth status:', error);
-        setState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-          error: 'Failed to check auth status',
-        });
       }
+      
+      setIsLoading(false);
     };
-
-    checkAuthStatus();
+    
+    checkAuth();
   }, []);
 
-  // Функция для входа в систему
+  // Функция для входа
   const login = async (credentials: LoginCredentials): Promise<boolean> => {
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
-
     try {
-      // Проверка учетных данных с нашими мок-данными
-      const foundUser = MOCK_USERS.find(
-        u => u.username === credentials.username && u.password === credentials.password
-      );
+      // В реальном приложении здесь был бы запрос к API
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(credentials)
+      });
       
-      if (foundUser) {
-        const { password, ...userWithoutPassword } = foundUser;
-        setState({
-          user: userWithoutPassword,
-          isAuthenticated: true,
-          isLoading: false,
-          error: null,
-        });
-        // Сохраняем данные пользователя в cookies
-        Cookies.set('user', JSON.stringify(userWithoutPassword), { expires: 1 });
-        return true;
-      } else {
-        setState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-          error: 'Invalid credentials',
-        });
+      if (!response.ok) {
         return false;
       }
+      
+      const userData = await response.json();
+      
+      // Check if we got a valid user response (not an error)
+      if (userData && userData.id) {
+        // Устанавливаем cookie (в реальном приложении это был бы JWT токен)
+        document.cookie = `user=${userData.username}; path=/; max-age=86400`;
+        setIsAuthenticated(true);
+        setCurrentUser(userData);
+        setIsSuperAdmin(userData.username === 'admin');
+        return true;
+      }
+      
+      return false;
     } catch (error) {
       console.error('Login error:', error);
-      setState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        error: 'Login failed',
-      });
       return false;
     }
   };
 
-  // Функция для выхода из системы
+  // Функция для выхода
   const logout = async (): Promise<void> => {
-    // Удаляем данные пользователя из cookies
-    Cookies.remove('user');
-
-    setState({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      error: null,
-    });
+    // Удаляем cookie
+    document.cookie = 'user=; path=/; max-age=0';
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setIsSuperAdmin(false);
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, login, logout }}>
+    <AuthContext.Provider value={{ 
+      isAuthenticated, 
+      isLoading, 
+      currentUser, 
+      isSuperAdmin, 
+      login, 
+      logout 
+    }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-// Хук для использования контекста аутентификации
-export const useAuth = () => {
+export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}; 
+} 

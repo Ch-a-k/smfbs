@@ -22,8 +22,13 @@ export default function CookieConsent() {
   const [showBanner, setShowBanner] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<CookieSettings>(defaultSettings);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
+    
+    if (typeof window === 'undefined') return;
+    
     try {
       // Check if user has already made a choice
       const consent = localStorage.getItem('cookieConsent');
@@ -49,12 +54,16 @@ export default function CookieConsent() {
     } catch (error) {
       // Если возникла ошибка при парсинге JSON, сбрасываем к настройкам по умолчанию
       console.error('Error parsing cookie consent:', error);
-      localStorage.removeItem('cookieConsent');
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('cookieConsent');
+      }
       setShowBanner(true);
     }
   }, []);
 
   const handleAcceptAll = () => {
+    if (typeof window === 'undefined') return;
+    
     const allAccepted = {
       necessary: true,
       analytics: true,
@@ -83,6 +92,8 @@ export default function CookieConsent() {
   };
 
   const handleSaveSettings = () => {
+    if (typeof window === 'undefined') return;
+    
     try {
       // Получаем текущие настройки из localStorage
       const currentConsent = localStorage.getItem('cookieConsent');
@@ -106,6 +117,8 @@ export default function CookieConsent() {
   };
 
   const handleRejectAll = () => {
+    if (typeof window === 'undefined') return;
+    
     try {
       localStorage.setItem('cookieConsent', JSON.stringify(defaultSettings));
       setSettings(defaultSettings);
@@ -114,6 +127,11 @@ export default function CookieConsent() {
       console.error('Error rejecting cookies:', error);
     }
   };
+
+  // Не показываем ничего на сервере
+  if (!isClient) {
+    return null;
+  }
 
   return (
     <>

@@ -652,21 +652,61 @@ export const fetchBookings = async () => {
 
 // Создание нового бронирования
 export const createBooking = async (bookingData: any) => {
-  const newBooking = {
-    ...bookingData,
-    id: generateId(),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    // Добавляем поля, которые могут отсутствовать в bookingData
-    date: bookingData.date || bookingData.booking_date,
-    roomName: mockRooms.find(r => r.id === Number(bookingData.roomId))?.name || `Pokój ${bookingData.roomId}`,
-    packageName: mockPackages.find(p => p.id === Number(bookingData.packageId))?.name || `Pakiet ${bookingData.packageId}`
-  };
+  console.log('MOCK API: Создание бронирования с данными:', bookingData);
   
-  mockBookings.push(newBooking);
-  console.log('Создано новое бронирование:', newBooking);
-  
-  return Promise.resolve({ booking: newBooking, message: 'Rezerwacja utworzona pomyślnie' });
+  try {
+    // Проверка обязательных полей
+    if (!bookingData.packageId) throw new Error('Не указан ID пакета');
+    if (!bookingData.roomId) throw new Error('Не указана комната');
+    if (!bookingData.date && !bookingData.booking_date) throw new Error('Не указана дата');
+    if (!bookingData.customerName && !bookingData.name) throw new Error('Не указано имя клиента');
+    
+    // Генерируем ID для нового бронирования
+    const newId = generateId();
+    console.log('MOCK API: Сгенерирован ID для нового бронирования:', newId);
+    
+    // Получаем информацию о комнате и пакете
+    const room = mockRooms.find(r => r.id === Number(bookingData.roomId));
+    const pkg = mockPackages.find(p => p.id === Number(bookingData.packageId));
+    
+    if (!room) {
+      console.error('MOCK API: Комната не найдена:', bookingData.roomId);
+      throw new Error(`Комната с ID ${bookingData.roomId} не найдена`);
+    }
+    
+    if (!pkg) {
+      console.error('MOCK API: Пакет не найден:', bookingData.packageId);
+      throw new Error(`Пакет с ID ${bookingData.packageId} не найден`);
+    }
+    
+    // Создаем новое бронирование
+    const newBooking = {
+      ...bookingData,
+      id: newId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      // Добавляем поля, которые могут отсутствовать в bookingData
+      date: bookingData.date || bookingData.booking_date,
+      roomName: room.name,
+      packageName: pkg.name,
+      // Гарантируем наличие всех необходимых полей
+      name: bookingData.name || bookingData.customerName,
+      customerName: bookingData.customerName || bookingData.name,
+      customerEmail: bookingData.customerEmail || bookingData.email,
+      customerPhone: bookingData.customerPhone || bookingData.phone,
+      totalPrice: bookingData.totalPrice || bookingData.totalAmount || pkg.price,
+      totalAmount: bookingData.totalAmount || bookingData.totalPrice || pkg.price,
+      status: 'confirmed'
+    };
+    
+    mockBookings.push(newBooking);
+    console.log('MOCK API: Создано новое бронирование:', newBooking);
+    
+    return Promise.resolve({ booking: newBooking, message: 'Rezerwacja utworzona pomyślnie' });
+  } catch (error) {
+    console.error('MOCK API: Ошибка при создании бронирования:', error);
+    return Promise.reject(error);
+  }
 };
 
 // Обновление бронирования

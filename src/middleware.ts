@@ -30,6 +30,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/admin', request.url));
   }
   
+  // Если путь корневой админки, перенаправляем на страницу добавления бронирования
+  if (pathname === '/admin' && userCookie) {
+    return NextResponse.redirect(new URL('/admin/bookings/add', request.url));
+  }
+  
   return NextResponse.next();
 }
 

@@ -34,14 +34,18 @@ function validateTranslations() {
 function getInitialLocale(): Locale {
   if (typeof window === 'undefined') return 'pl';
 
-  const savedLocale = localStorage.getItem('locale') as Locale | null;
-  if (savedLocale && ['pl', 'en'].includes(savedLocale)) {
-    return savedLocale;
-  }
+  try {
+    const savedLocale = localStorage.getItem('locale') as Locale | null;
+    if (savedLocale && ['pl', 'en'].includes(savedLocale)) {
+      return savedLocale;
+    }
 
-  const browserLocale = navigator.language.split('-')[0];
-  if (browserLocale === 'pl' || browserLocale === 'en') {
-    return browserLocale as Locale;
+    const browserLocale = navigator.language.split('-')[0];
+    if (browserLocale === 'pl' || browserLocale === 'en') {
+      return browserLocale as Locale;
+    }
+  } catch (error) {
+    console.error('Error accessing browser APIs:', error);
   }
 
   return 'pl';
@@ -53,8 +57,10 @@ type I18nProviderProps = {
 
 export function I18nProvider({ children }: I18nProviderProps) {
   const [locale, setLocaleState] = useState<Locale>('pl');
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
     // Проверяем переводы при инициализации
     validateTranslations();
     
@@ -68,7 +74,13 @@ export function I18nProvider({ children }: I18nProviderProps) {
 
   const setLocale = (newLocale: Locale) => {
     setLocaleState(newLocale);
-    localStorage.setItem('locale', newLocale);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('locale', newLocale);
+      } catch (error) {
+        console.error('Error setting locale in localStorage:', error);
+      }
+    }
     document.documentElement.lang = newLocale;
   };
 

@@ -15,7 +15,6 @@ import {
   Check 
 } from 'lucide-react';
 import { ReactElement } from 'react';
-import { mockCrossSellItems } from '@/lib/frontend-mocks';
 
 // Определение типов для кросс-селов
 export type CrossSellItem = {
@@ -24,6 +23,21 @@ export type CrossSellItem = {
   icon: ReactElement;
   price: number;
   selected?: boolean;
+};
+
+// Типы иконок для предметов (такие же как в ExtraItemsSection.tsx)
+type ItemKey = 'glass' | 'keyboard' | 'tvMonitor' | 'furniture' | 'printer' | 'mouse' | 'phone' | 'goProRecording';
+
+// Цены товаров из локализации
+const ITEM_PRICES: Record<ItemKey, number> = {
+  'glass': 50,        // 10 стеклянных предметов - 50 PLN
+  'keyboard': 20,     // Клавиатура - 20 PLN
+  'tvMonitor': 100,   // ТВ/монитор - 100 PLN
+  'furniture': 120,   // Мебель - 120 PLN
+  'printer': 50,      // Принтер - 50 PLN
+  'mouse': 10,        // Компьютерная мышь - 10 PLN
+  'phone': 30,        // Телефон - 30 PLN
+  'goProRecording': 50 // GoPro запись - 50 PLN
 };
 
 interface CrossSellItemsProps {
@@ -38,8 +52,8 @@ export default function CrossSellItems({ onItemToggle, selectedItems, totalAddit
 
   // Загружаем данные при монтировании компонента
   useEffect(() => {
-    // Создаем иконки для элементов на основе их ID
-    const getIconForItem = (id: string): ReactElement => {
+    // Создаем иконки для элементов
+    const getIconForItem = (id: ItemKey): ReactElement => {
       switch (id) {
         case 'glass':
           return <Wine className="w-4 h-4" />;
@@ -51,26 +65,46 @@ export default function CrossSellItems({ onItemToggle, selectedItems, totalAddit
           return <Sofa className="w-4 h-4" />;
         case 'printer':
           return <Printer className="w-4 h-4" />;
+        case 'mouse':
+          return <Mouse className="w-4 h-4" />;
+        case 'phone':
+          return <Phone className="w-4 h-4" />;
         case 'goProRecording':
           return <Camera className="w-4 h-4" />;
-        default:
-          return <Check className="w-4 h-4" />;
       }
     };
 
-    // Преобразуем моковые данные в формат, ожидаемый компонентом
-    const items = mockCrossSellItems
-      .filter(item => item.isActive)
-      .map(item => ({
-        id: item.id,
-        name: item.name,
-        icon: getIconForItem(item.id),
-        price: item.price,
-        selected: selectedItems.includes(item.id)
-      }));
+    // Список всех доступных предметов из ExtraItemsSection
+    const extraItemKeys: ItemKey[] = [
+      'glass',
+      'keyboard',
+      'tvMonitor',
+      'furniture',
+      'printer',
+      'mouse',
+      'phone',
+      'goProRecording'
+    ];
+
+    // Создаем элементы для отображения в компоненте
+    const items = extraItemKeys.map(itemKey => ({
+      id: itemKey,
+      name: getItemName(itemKey),
+      icon: getIconForItem(itemKey),
+      price: ITEM_PRICES[itemKey],
+      selected: selectedItems.includes(itemKey)
+    }));
 
     setCrossSellItems(items);
-  }, [selectedItems]);
+  }, [selectedItems, t]);
+
+  // Получаем название товара из локализации
+  const getItemName = (itemKey: ItemKey): string => {
+    // Извлекаем только название товара из строки локализации
+    // Пример: "10 стеклянных предметов - 50 PLN" -> "10 стеклянных предметов"
+    const fullText = t(`home.pricing.extraItems.items.${itemKey}`);
+    return fullText.split(' - ')[0];
+  };
 
   // Функция для отрисовки ячейки товара
   const renderItemCell = (item: CrossSellItem, index: number) => {
@@ -115,7 +149,7 @@ export default function CrossSellItems({ onItemToggle, selectedItems, totalAddit
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h4 className="text-white text-sm font-medium">
-          {t('booking.crossSell.title')}
+          {t('booking.extras.title')}
         </h4>
         
         {totalAdditionalPrice > 0 && (
@@ -126,12 +160,38 @@ export default function CrossSellItems({ onItemToggle, selectedItems, totalAddit
       </div>
       
       <p className="text-xs text-gray-400">
-        {t('booking.crossSell.description')}
+        {t('booking.extras.subtitle')}
       </p>
       
-      <div className="grid grid-cols-3 gap-2 mt-3">
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-3">
         {crossSellItems.map((item, index) => renderItemCell(item, index))}
       </div>
+      
+      {selectedItems.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-white/10">
+          <h5 className="text-white text-xs font-medium mb-2">
+            {t('booking.extras.selected')}:
+          </h5>
+          <div className="space-y-1 text-gray-400 text-xs">
+            {selectedItems.map((itemId) => {
+              const item = crossSellItems.find(item => item.id === itemId);
+              return (
+                <div key={itemId} className="flex justify-between">
+                  <span className="flex items-center">
+                    <Check className="w-3 h-3 mr-1 text-[#f36e21]" />
+                    {item?.name}
+                  </span>
+                  <span>{item?.price} PLN</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex justify-between text-white text-sm font-medium mt-2 pt-2 border-t border-white/10">
+            <span>{t('booking.extras.total')}:</span>
+            <span className="text-[#f36e21]">{totalAdditionalPrice} PLN</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

@@ -1,506 +1,285 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { format, parseISO, addMonths, subMonths } from 'date-fns';
-import { pl } from 'date-fns/locale';
-import { Booking, PaymentStatus, BookingFormData } from '@/types/booking';
-import AdminBookingCalendar from '@/components/admin/AdminBookingCalendar';
-import AdminBookingDetails from '@/components/admin/AdminBookingDetails';
-import AdminCreateBooking from '@/components/admin/AdminCreateBooking';
-import AdminBookingManager from '@/components/admin/AdminBookingManager';
+import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { format, addDays } from 'date-fns';
+import { ru } from 'date-fns/locale';
+import { Search, Plus, Trash2, Edit, Filter, Calendar } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 import Link from 'next/link';
-import { useBookings, useBookingMutations } from '@/app/api/hooks';
 
-// Типы для вкладок администратора
-type AdminTab = 'calendar' | 'list' | 'analytics' | 'create';
+// Моковые данные бронирований
+const mockBookings = [
+  {
+    id: '1',
+    customerName: 'Иван Петров',
+    email: 'ivan@example.com',
+    phone: '+48123456789',
+    packageName: 'ŚREDNI',
+    date: new Date(2024, 2, 15, 14, 0),
+    duration: 120,
+    room: 'Комната 1',
+    status: 'paid',
+    totalPrice: 499
+  },
+  {
+    id: '2',
+    customerName: 'Анна Смирнова',
+    email: 'anna@example.com',
+    phone: '+48987654321',
+    packageName: 'TRUDNY',
+    date: new Date(2024, 2, 15, 17, 0),
+    duration: 180,
+    room: 'Комната 2',
+    status: 'deposit',
+    totalPrice: 999
+  },
+  {
+    id: '3',
+    customerName: 'Петр Сидоров',
+    email: 'petr@example.com',
+    phone: '+48555666777',
+    packageName: 'ŁATWY',
+    date: new Date(2024, 2, 16, 10, 0),
+    duration: 45,
+    room: 'Комната 1',
+    status: 'unpaid',
+    totalPrice: 299
+  },
+  {
+    id: '4',
+    customerName: 'Мария Иванова',
+    email: 'maria@example.com',
+    phone: '+48111222333',
+    packageName: 'BUŁKA Z MASŁEM',
+    date: new Date(2024, 2, 17, 12, 0),
+    duration: 30,
+    room: 'Комната 3',
+    status: 'paid',
+    totalPrice: 199
+  },
+  {
+    id: '5',
+    customerName: 'Алексей Кузнецов',
+    email: 'alex@example.com',
+    phone: '+48444555666',
+    packageName: 'ŚREDNI',
+    date: addDays(new Date(), 1),
+    duration: 120,
+    room: 'Комната 2',
+    status: 'paid',
+    totalPrice: 499
+  },
+  {
+    id: '6',
+    customerName: 'Ольга Новикова',
+    email: 'olga@example.com',
+    phone: '+48777888999',
+    packageName: 'TRUDNY',
+    date: addDays(new Date(), 2),
+    duration: 180,
+    room: 'Комната 1',
+    status: 'deposit',
+    totalPrice: 999
+  },
+  {
+    id: '7',
+    customerName: 'Дмитрий Смирнов',
+    email: 'dmitry@example.com',
+    phone: '+48333222111',
+    packageName: 'ŁATWY',
+    date: new Date(),
+    duration: 45,
+    room: 'Комната 3',
+    status: 'unpaid',
+    totalPrice: 299
+  }
+];
 
-export default function AdminBookingsPage() {
-  const [activeTab, setActiveTab] = useState<AdminTab>('calendar');
-  const { bookings, isLoading, error, refetch } = useBookings();
-  const { createBooking, updatePaymentStatus, updateAdminComment, deleteBooking } = useBookingMutations();
-  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [showBookingDetails, setShowBookingDetails] = useState(false);
-  
-  // Обработчик просмотра деталей бронирования
-  const handleViewBooking = (booking: Booking) => {
-    setSelectedBooking(booking);
-    setShowBookingDetails(true);
-  };
-  
-  // Обработчик создания нового бронирования
-  const handleBookingCreate = async (bookingData: BookingFormData, paymentStatus: PaymentStatus) => {
-    try {
-      console.log('Создание бронирования с данными:', bookingData, 'Статус оплаты:', paymentStatus);
-      
-      await createBooking(bookingData, paymentStatus);
-      
-      // Обновляем список бронирований
-      await refetch();
-      
-      // Возвращаемся к календарю
-      setActiveTab('calendar');
-      
-      // Сообщение об успешном создании
-      alert('Бронирование успешно создано');
-    } catch (error) {
-      console.error('Ошибка создания бронирования:', error);
-      alert(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
-      throw error;
-    }
-  };
-  
-  // Обработчик обновления статуса оплаты
-  const handlePaymentStatusUpdate = async (bookingId: string | number, newStatus: PaymentStatus) => {
-    try {
-      await updatePaymentStatus(bookingId, newStatus);
-      
-      // Обновляем список бронирований
-      await refetch();
-      
-      // Обновляем выбранное бронирование, если оно было выбрано
-      if (selectedBooking && selectedBooking.id === bookingId) {
-        const updatedBooking = { ...selectedBooking, paymentStatus: newStatus };
-        setSelectedBooking(updatedBooking);
-      }
-    } catch (error) {
-      console.error('Error updating payment status:', error);
-      throw error;
-    }
-  };
-  
-  // Обработчик обновления комментария администратора
-  const handleAdminCommentUpdate = async (bookingId: string | number, comment: string) => {
-    try {
-      await updateAdminComment(bookingId, comment);
-      
-      // Обновляем список бронирований
-      await refetch();
-      
-      // Обновляем выбранное бронирование, если оно было выбрано
-      if (selectedBooking && selectedBooking.id === bookingId) {
-        const updatedBooking = { ...selectedBooking, adminComment: comment };
-        setSelectedBooking(updatedBooking);
-      }
-    } catch (error) {
-      console.error('Error updating admin comment:', error);
-      throw error;
-    }
-  };
-  
-  // Обработчик удаления бронирования
-  const handleDeleteBooking = async (bookingId: string | number) => {
-    if (!confirm('Czy na pewno chcesz usunąć tę rezerwację?')) {
-      return;
+// Функция для получения статуса оплаты
+const getStatusBadge = (status: string) => {
+  switch (status) {
+    case 'paid':
+      return <Badge className="bg-green-500">Оплачено</Badge>;
+    case 'deposit':
+      return <Badge className="bg-yellow-500">Задаток</Badge>;
+    case 'unpaid':
+      return <Badge className="bg-red-500">Не оплачено</Badge>;
+    default:
+      return null;
+  }
+};
+
+export default function BookingsPage() {
+  const [bookings, setBookings] = useState(mockBookings);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [isFiltersVisible, setIsFiltersVisible] = useState(false);
+  const { toast } = useToast();
+
+  // Фильтрация бронирований
+  const filteredBookings = bookings.filter(booking => {
+    // Фильтр по статусу
+    if (statusFilter !== 'all' && booking.status !== statusFilter) {
+      return false;
     }
     
-    try {
-      await deleteBooking(bookingId);
-      
-      // Обновляем список бронирований
-      await refetch();
-      
-      // Если было выбрано удаленное бронирование, закрываем его
-      if (selectedBooking && selectedBooking.id === bookingId) {
-        setSelectedBooking(null);
-        setShowBookingDetails(false);
-      }
-    } catch (error) {
-      console.error('Error deleting booking:', error);
-      throw error;
+    // Поиск по имени, email или телефону
+    if (searchTerm) {
+      const searchTermLower = searchTerm.toLowerCase();
+      return (
+        booking.customerName.toLowerCase().includes(searchTermLower) ||
+        booking.email.toLowerCase().includes(searchTermLower) ||
+        booking.phone.includes(searchTerm)
+      );
     }
-  };
-  
-  // Передача пропсов в компоненты табов
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'calendar':
-        console.log('Отображение календаря с бронированиями:', { 
-          bookingsCount: bookings.length,
-          selectedDate,
-          hasBookingsForDate: bookings.filter(b => b.date === selectedDate || b.bookingDate === selectedDate).length
-        });
-        return (
-          <AdminBookingCalendar
-            bookings={bookings}
-            selectedDate={selectedDate}
-            onDateSelect={handleDateSelect}
-            onViewBooking={handleViewBooking}
-          />
-        );
-      case 'list':
-        return (
-          <AdminBookingManager
-            bookings={bookings}
-            selectedDate={selectedDate}
-            onViewBooking={handleViewBooking}
-            onDateSelect={(date) => date ? setSelectedDate(date) : setSelectedDate(format(new Date(), 'yyyy-MM-dd'))}
-            isLoading={isLoading}
-          />
-        );
-      case 'analytics':
-        return renderAnalyticsTab();
-      default:
-        return null;
-    }
-  };
-
-  // Обработчик изменения выбранной даты в календаре
-  const handleDateSelect = (date: string) => {
-    console.log('Выбрана новая дата в календаре:', date);
-    console.log('Бронирования на выбранную дату:', bookings.filter(b => 
-      b.date === date || b.bookingDate === date
-    ));
-    setSelectedDate(date);
-  };
-  
-  // Рендер вкладки аналитики
-  const renderAnalyticsTab = () => {
-    // Данные для текущего и прошлого месяцев
-    const currentMonth = new Date();
-    const previousMonth = subMonths(currentMonth, 1);
     
-    // Статистика по бронированиям
-    const currentMonthBookings = bookings.filter(booking => {
-      const bookingDate = parseISO(booking.date);
-      return bookingDate.getMonth() === currentMonth.getMonth() && 
-             bookingDate.getFullYear() === currentMonth.getFullYear();
+    return true;
+  });
+
+  // Сортировка бронирований по дате (сначала новые)
+  const sortedBookings = [...filteredBookings].sort((a, b) => 
+    b.date.getTime() - a.date.getTime()
+  );
+
+  // Удаление бронирования
+  const handleDeleteBooking = (id: string) => {
+    setBookings(bookings.filter(booking => booking.id !== id));
+    toast({
+      title: "Бронирование удалено",
+      description: "Бронирование было успешно удалено.",
     });
-    
-    const previousMonthBookings = bookings.filter(booking => {
-      const bookingDate = parseISO(booking.date);
-      return bookingDate.getMonth() === previousMonth.getMonth() && 
-             bookingDate.getFullYear() === previousMonth.getFullYear();
-    });
-    
-    // Доход за текущий и прошлый месяцы
-    const currentMonthRevenue = currentMonthBookings.reduce((sum, booking) => 
-      sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount || 0 : booking.paidAmount || 0), 0);
-      
-    const previousMonthRevenue = previousMonthBookings.reduce((sum, booking) => 
-      sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount || 0 : booking.paidAmount || 0), 0);
-    
-    // Статистика по комнатам
-    const roomStats = [1, 2, 3, 4].map(roomId => {
-      const roomBookings = currentMonthBookings.filter(booking => booking.roomId === roomId);
-      return {
-        roomId,
-        bookingsCount: roomBookings.length,
-        revenue: roomBookings.reduce((sum, booking) => 
-          sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount || 0 : booking.paidAmount || 0), 0),
-        occupancyRate: roomBookings.length > 0 ? (roomBookings.length / 30 * 100).toFixed(1) + '%' : '0%'
-      };
-    }).sort((a, b) => b.bookingsCount - a.bookingsCount);
-    
-    // Статистика по пакетам
-    const packageIds = [...new Set(bookings.filter(booking => booking.packageId !== undefined).map(booking => booking.packageId))];
-    const packageStats = packageIds
-      .map(packageId => {
-        const packageName = bookings.find(b => b.packageId === packageId)?.packageName || `Package ${packageId}`;
-        const packageBookings = currentMonthBookings.filter(booking => booking.packageId === packageId);
-        return {
-          packageId,
-          packageName,
-          bookingsCount: packageBookings.length,
-          revenue: packageBookings.reduce((sum, booking) => 
-            sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount || 0 : booking.paidAmount || 0), 0),
-          averagePrice: packageBookings.length > 0 
-            ? (packageBookings.reduce((sum, booking) => sum + (booking.totalAmount || 0), 0) / packageBookings.length).toFixed(0)
-            : 0
-        };
-      })
-      .filter(pkg => pkg.bookingsCount > 0)
-      .sort((a, b) => b.bookingsCount - a.bookingsCount);
-    
-    // Статистика по дням недели
-    const daysOfWeek = ['Niedziela', 'Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota'];
-    const dayStats = daysOfWeek.map((dayName, index) => {
-      const dayBookings = bookings.filter(booking => {
-        try {
-          const date = parseISO(booking.date);
-          return date.getDay() === index;
-        } catch (e) {
-          return false;
-        }
-      });
-      
-      return {
-        day: dayName,
-        bookingsCount: dayBookings.length,
-        revenue: dayBookings.reduce((sum, booking) => 
-          sum + (booking.paymentStatus === 'FULLY_PAID' ? booking.totalAmount || 0 : booking.paidAmount || 0), 0)
-      };
-    }).sort((a, b) => b.bookingsCount - a.bookingsCount);
-    
-    // Статистика по статусам оплаты
-    const paymentStatusStats = [
-      {
-        status: 'Opłacone w całości',
-        count: bookings.filter(b => b.paymentStatus === 'FULLY_PAID').length,
-        percentage: (bookings.filter(b => b.paymentStatus === 'FULLY_PAID').length / (bookings.length || 1) * 100).toFixed(1) + '%'
-      },
-      {
-        status: 'Zaliczka',
-        count: bookings.filter(b => b.paymentStatus === 'DEPOSIT_PAID').length,
-        percentage: (bookings.filter(b => b.paymentStatus === 'DEPOSIT_PAID').length / (bookings.length || 1) * 100).toFixed(1) + '%'
-      },
-      {
-        status: 'Nieopłacone',
-        count: bookings.filter(b => b.paymentStatus === 'UNPAID').length,
-        percentage: (bookings.filter(b => b.paymentStatus === 'UNPAID').length / (bookings.length || 1) * 100).toFixed(1) + '%'
-      }
-    ];
-    
+  };
+
     return (
-      <div className="space-y-8">
-        {/* Общая статистика */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-white mb-2">Rezerwacje w tym miesiącu</h3>
-            <p className="text-3xl font-bold text-[#f36e21]">{currentMonthBookings.length}</p>
-            <p className="text-sm text-gray-400 mt-1">
-              {previousMonthBookings.length > 0 
-                ? `${((currentMonthBookings.length / previousMonthBookings.length - 1) * 100).toFixed(1)}% vs. poprzedni miesiąc` 
-                : 'Brak danych z poprzedniego miesiąca'}
-            </p>
-          </div>
-          
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-white mb-2">Przychód w tym miesiącu</h3>
-            <p className="text-3xl font-bold text-[#f36e21]">{currentMonthRevenue} PLN</p>
-            <p className="text-sm text-gray-400 mt-1">
-              {previousMonthRevenue > 0 
-                ? `${((currentMonthRevenue / previousMonthRevenue - 1) * 100).toFixed(1)}% vs. poprzedni miesiąc` 
-                : 'Brak danych z poprzedniego miesiąca'}
-            </p>
-          </div>
-          
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-white mb-2">Nieopłacone rezerwacje</h3>
-            <p className="text-3xl font-bold text-[#f36e21]">
-              {currentMonthBookings.filter(b => b.paymentStatus === 'UNPAID').length}
-            </p>
-            <p className="text-sm text-gray-400 mt-1">
-              {currentMonthBookings.length > 0 
-                ? `${((currentMonthBookings.filter(b => b.paymentStatus === 'UNPAID').length / currentMonthBookings.length) * 100).toFixed(1)}% wszystkich rezerwacji` 
-                : 'Brak rezerwacji w tym miesiącu'}
-            </p>
-          </div>
-          
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-white mb-2">Średnia wartość rezerwacji</h3>
-            <p className="text-3xl font-bold text-[#f36e21]">
-              {currentMonthBookings.length > 0 
-                ? (currentMonthRevenue / currentMonthBookings.length).toFixed(0) 
-                : 0} PLN
-            </p>
-            <p className="text-sm text-gray-400 mt-1">
-              {previousMonthBookings.length > 0 && previousMonthRevenue > 0
-                ? `${(((currentMonthRevenue / currentMonthBookings.length) / (previousMonthRevenue / previousMonthBookings.length) - 1) * 100).toFixed(1)}% vs. poprzedni miesiąc`
-                : 'Brak danych z poprzedniego miesiąca'}
-            </p>
-          </div>
-        </div>
-        
-        {/* Статистика по статусам оплаты */}
+    <div className="space-y-6 p-6">
+      <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-medium text-white mb-4">Statystyki płatności</h3>
-          <div className="bg-gray-800 rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-700">
-              <thead className="bg-gray-900">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Liczba rezerwacji</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Procent</th>
-                </tr>
-              </thead>
-              <tbody className="bg-gray-800 divide-y divide-gray-700">
-                {paymentStatusStats.map((stat, index) => (
-                  <tr key={index}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{stat.status}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{stat.count}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{stat.percentage}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <h2 className="text-3xl font-bold tracking-tight">Бронирования</h2>
+          <p className="text-muted-foreground">
+            Управление всеми бронированиями
+            </p>
           </div>
-        </div>
-        
-        {/* Статистика по комнатам */}
-        <div>
-          <h3 className="text-lg font-medium text-white mb-4">Statystyki pokoi</h3>
-          <div className="bg-gray-800 rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-700">
-              <thead className="bg-gray-900">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Pokój</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Liczba rezerwacji</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Przychód</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Poziom obłożenia</th>
-                </tr>
-              </thead>
-              <tbody className="bg-gray-800 divide-y divide-gray-700">
-                {roomStats.map(room => (
-                  <tr key={room.roomId}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">Pokój {room.roomId}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{room.bookingsCount}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{room.revenue} PLN</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{room.occupancyRate}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        
-        {/* Статистика по пакетам */}
-        <div>
-          <h3 className="text-lg font-medium text-white mb-4">Najpopularniejsze pakiety</h3>
-          <div className="bg-gray-800 rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-700">
-              <thead className="bg-gray-900">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Pakiet</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Liczba rezerwacji</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Przychód</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Średnia cena</th>
-                </tr>
-              </thead>
-              <tbody className="bg-gray-800 divide-y divide-gray-700">
-                {packageStats.map(pkg => (
-                  <tr key={pkg.packageId}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{pkg.packageName}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{pkg.bookingsCount}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{pkg.revenue} PLN</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{pkg.averagePrice} PLN</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        
-        {/* Статистика по дням недели */}
-        <div>
-          <h3 className="text-lg font-medium text-white mb-4">Najpopularniejsze dni tygodnia</h3>
-          <div className="bg-gray-800 rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-700">
-              <thead className="bg-gray-900">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Dzień tygodnia</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Liczba rezerwacji</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Przychód</th>
-                </tr>
-              </thead>
-              <tbody className="bg-gray-800 divide-y divide-gray-700">
-                {dayStats.map((day, index) => (
-                  <tr key={index}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{day.day}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{day.bookingsCount}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{day.revenue} PLN</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="flex gap-2">
+          <Button asChild>
+            <Link href="/admin/calendar">
+              <Calendar className="mr-2 h-4 w-4" />
+              Календарь
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/bookings/add">
+              <Plus className="mr-2 h-4 w-4" />
+              Новое бронирование
+            </Link>
+          </Button>
         </div>
       </div>
-    );
-  };
-  
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-12">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-4xl font-bold text-white">Panel administracyjny</h1>
-        
-        <div className="flex gap-4">
-          <Link
-            href="/admin/customers"
-            className="bg-gray-700 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors flex items-center"
-          >
-            <svg 
-              className="w-5 h-5 mr-2" 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24" 
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2}
-                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" 
-              />
-            </svg>
-            Klienci
-          </Link>
 
-          <button
-            onClick={() => setActiveTab('create')}
-            className="bg-[#f36e21] text-white py-2 px-4 rounded-md hover:bg-[#ff7b2e] transition-colors"
-          >
-            + Dodaj rezerwację
-          </button>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Поиск по имени, email или телефону..."
+                className="pl-8"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setIsFiltersVisible(!isFiltersVisible)}
+              >
+                <Filter className="mr-2 h-4 w-4" />
+                Фильтры
+              </Button>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Статус оплаты" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все статусы</SelectItem>
+                  <SelectItem value="paid">Оплачено</SelectItem>
+                  <SelectItem value="deposit">Задаток</SelectItem>
+                  <SelectItem value="unpaid">Не оплачено</SelectItem>
+                </SelectContent>
+              </Select>
         </div>
       </div>
-      
-      {/* Вкладки */}
-      <div className="border-b border-white/10 mb-8">
-        <nav className="flex space-x-8">
-          <button
-            onClick={() => setActiveTab('calendar')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'calendar' 
-                ? 'border-[#f36e21] text-[#f36e21]' 
-                : 'border-transparent text-white/70 hover:text-white/90 hover:border-white/30'
-            }`}
-          >
-            Kalendarz
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('list')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'list' 
-                ? 'border-[#f36e21] text-[#f36e21]' 
-                : 'border-transparent text-white/70 hover:text-white/90 hover:border-white/30'
-            }`}
-          >
-            Lista
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('analytics')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'analytics' 
-                ? 'border-[#f36e21] text-[#f36e21]' 
-                : 'border-transparent text-white/70 hover:text-white/90 hover:border-white/30'
-            }`}
-          >
-            Analityka
-          </button>
-        </nav>
-      </div>
-      
-      {/* Содержимое активной вкладки */}
-      {renderTabContent()}
-      {activeTab === 'create' && (
-        <AdminCreateBooking 
-          onBookingCreate={handleBookingCreate}
-        />
+        </CardHeader>
+        <CardContent>
+          {sortedBookings.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Бронирований не найдено</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border bg-muted">
+                    <th className="text-left py-3 px-4 font-medium text-foreground">Клиент</th>
+                    <th className="text-left py-3 px-4 font-medium text-foreground">Дата и время</th>
+                    <th className="text-left py-3 px-4 font-medium text-foreground">Пакет</th>
+                    <th className="text-left py-3 px-4 font-medium text-foreground">Комната</th>
+                    <th className="text-left py-3 px-4 font-medium text-foreground">Статус</th>
+                    <th className="text-left py-3 px-4 font-medium text-foreground">Цена</th>
+                    <th className="text-right py-3 px-4 font-medium text-foreground">Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedBookings.map(booking => (
+                    <tr key={booking.id} className="border-b border-border hover:bg-muted/50 animate-table-row">
+                      <td className="py-3 px-4">
+                        <div>
+                          <p className="font-medium text-foreground">{booking.customerName}</p>
+                          <p className="text-sm text-muted-foreground">{booking.email}</p>
+                          <p className="text-sm text-muted-foreground">{booking.phone}</p>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="text-foreground">{format(booking.date, 'dd.MM.yyyy')}</p>
+                        <p className="text-sm text-muted-foreground">{format(booking.date, 'HH:mm')}</p>
+                      </td>
+                      <td className="py-3 px-4 text-foreground">{booking.packageName}</td>
+                      <td className="py-3 px-4 text-foreground">{booking.room}</td>
+                      <td className="py-3 px-4">
+                        {booking.status === 'paid' && <Badge variant="success">Оплачено</Badge>}
+                        {booking.status === 'deposit' && <Badge variant="warning">Задаток</Badge>}
+                        {booking.status === 'unpaid' && <Badge variant="destructive">Не оплачено</Badge>}
+                      </td>
+                      <td className="py-3 px-4 text-foreground font-medium">{booking.totalPrice} PLN</td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex justify-end space-x-2">
+                          <Button variant="ghost" size="icon" className="hover:bg-muted">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteBooking(booking.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+        </div>
       )}
-      
-      {/* Модальное окно с деталями бронирования */}
-      {showBookingDetails && selectedBooking && (
-        <AdminBookingDetails
-          booking={selectedBooking}
-          onClose={() => setShowBookingDetails(false)}
-          onPaymentStatusChange={handlePaymentStatusUpdate}
-          onAdminCommentChange={handleAdminCommentUpdate}
-          onDelete={handleDeleteBooking}
-        />
-      )}
+        </CardContent>
+      </Card>
     </div>
   );
 } 

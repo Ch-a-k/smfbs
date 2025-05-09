@@ -184,6 +184,7 @@ interface PricingCardWithModalProps {
 function PricingCardWithModal({ pkg, index }: PricingCardWithModalProps) {
   const { t } = useI18n()
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const isBestseller = pkg.isBestseller;
 
   // Преобразование данных пакета в формат для BookingModal
@@ -224,6 +225,8 @@ function PricingCardWithModal({ pkg, index }: PricingCardWithModalProps) {
           "relative group w-full",
           isBestseller && "lg:scale-110 lg:-translate-y-4 z-10"
         )}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
         {isBestseller && (
           <div className="absolute -inset-[2px] rounded-[20px] bg-gradient-to-r from-[#f36e21] via-[#ff9f58] to-[#f36e21] animate-border-flow" />
@@ -236,7 +239,9 @@ function PricingCardWithModal({ pkg, index }: PricingCardWithModalProps) {
           "flex flex-col h-full",
           isBestseller 
             ? "border-transparent shadow-xl shadow-[#f36e21]/20" 
-            : "border-white/10 hover:border-white/20"
+            : isHovered 
+              ? "border-white/30" 
+              : "border-white/10 hover:border-white/20"
         )}>
           {/* Header */}
           <div className="flex justify-between items-start">
@@ -253,8 +258,8 @@ function PricingCardWithModal({ pkg, index }: PricingCardWithModalProps) {
             </div>
             {isBestseller && (
               <Badge 
-                variant="featured"
-                className="flex items-center gap-1"
+                variant="destructive"
+                className="flex items-center gap-1 bg-[#f36e21]/80 hover:bg-[#f36e21] text-white"
               >
                 <Sparkles className="w-3 h-3" />
                 {t('home.pricing.bestSeller')}
@@ -270,20 +275,25 @@ function PricingCardWithModal({ pkg, index }: PricingCardWithModalProps) {
           </div>
 
           {/* Button */}
-          <button 
+          <motion.button 
             onClick={() => setIsModalOpen(true)}
             className={cn(
               "block w-full py-3 px-4 rounded-lg text-center mt-6",
               "font-medium text-sm",
               "transform transition-all duration-200",
-              "hover:scale-102 active:scale-98",
               isBestseller
                 ? "bg-[#f36e21] text-white hover:bg-[#f36e21]/90 shadow-lg shadow-[#f36e21]/20"
                 : "bg-white/10 text-white hover:bg-white/20"
             )}
+            whileHover={{ 
+              scale: 1.03,
+              boxShadow: isBestseller ? "0 8px 20px rgba(243, 110, 33, 0.3)" : "0 8px 16px rgba(0, 0, 0, 0.3)"
+            }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
             {t('home.pricing.bookNow')}
-          </button>
+          </motion.button>
         </div>
       </motion.div>
 

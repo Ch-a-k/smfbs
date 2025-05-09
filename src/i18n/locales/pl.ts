@@ -14,24 +14,32 @@ export const pl = {
   booking: {
     title: 'Rezerwacja',
     steps: {
-      date: 'Data i czas',
+      date: 'Data',
+      time: 'Czas',
       contact: 'Kontakt',
+      extras: 'Dodatki',
       payment: 'Płatność'
     },
     date: {
-      title: 'Wybierz datę i godzinę',
-      selectDate: 'Wybierz datę',
+      title: 'Wybierz datę',
+      subtitle: 'Wybierz dzień swojej wizyty',
+      selected: 'Wybrana data',
+      duration: 'Czas trwania',
+      minutes: 'minut'
+    },
+    time: {
+      title: 'Wybierz czas',
+      subtitle: 'Wybierz godzinę swojej wizyty',
       selectTime: 'Wybierz godzinę',
-      noTimeSlots: 'Brak dostępnych godzin w tym dniu',
-      loading: 'Ładowanie dostępnych godzin...',
-      durationLabel: 'Czas trwania:',
-      availability: {
-        available: 'Dostępne',
-        unavailable: 'Niedostępne'
-      }
+      selected: 'Wybrany czas',
+      to: 'do',
+      noAvailableSlots: 'Brak dostępnych godzin w tym dniu',
+      durationInfo: 'Czas trwania sesji',
+      minutes: 'minut'
     },
     contact: {
       title: 'Wprowadź swoje dane kontaktowe',
+      subtitle: 'Podaj swoje dane kontaktowe, abyśmy mogli potwierdzić Twoją rezerwację',
       name: 'Imię i nazwisko',
       namePlaceholder: 'Wpisz swoje imię i nazwisko',
       email: 'Email',
@@ -39,6 +47,7 @@ export const pl = {
       phone: 'Telefon',
       phonePlaceholder: 'Wpisz swój numer telefonu',
       numberOfPeople: 'Liczba osób',
+      persons: 'osób',
       promoCode: 'Kod promocyjny (opcjonalnie)',
       promoCodePlaceholder: 'Wpisz kod promocyjny jeśli posiadasz',
       comment: 'Komentarz (opcjonalnie)',
@@ -59,12 +68,20 @@ export const pl = {
       fullPaymentDesc: 'Zapłać pełną kwotę teraz',
       depositPayment: 'Tylko zaliczka',
       depositPaymentDesc: 'Zapłać minimalną zaliczkę teraz, resztę przy przybyciu',
-      provider: 'Bezpieczna płatność przetwarzana przez Przelewy24'
+      provider: 'Bezpieczna płatność przetwarzana przez Przelewy24',
+      confirmation: 'Potwierdzenie rezerwacji',
+      processingPayment: 'Przetwarzanie płatności...',
+      returnToSite: 'Powrót do strony'
     },
     crossSell: {
-      title: 'Dodatkowe przedmioty',
-      description: 'Wzbogać swoje doświadczenie o dodatkowe przedmioty. Wybierz te, które chcesz dodać do rezerwacji.',
-      add: 'Dodaj do rezerwacji'
+      title: 'Dodatkowe usługi',
+      description: 'Wzbogać swoje doświadczenie o dodatkowe usługi. Wybierz te, które chcesz dodać do rezerwacji.'
+    },
+    extras: {
+      title: 'Dodaj dodatkowe usługi',
+      subtitle: 'Opcjonalne usługi, które ulepszą Twoje doświadczenie',
+      selected: 'Wybrane usługi',
+      total: 'Suma za dodatkowe usługi'
     },
     validation: {
       dateRequired: 'Wybierz datę',
@@ -82,10 +99,18 @@ export const pl = {
       processing: 'Przetwarzanie...'
     },
     success: {
-      message: 'Twoja rezerwacja została pomyślnie złożona! Wkrótce otrzymasz e-mail z potwierdzeniem.'
+      title: 'Rezerwacja zakończona!',
+      message: 'Twoja rezerwacja została pomyślnie zakończona!',
+      reference: 'Numer referencyjny Twojej rezerwacji',
+      emailSent: 'Wysłaliśmy potwierdzenie na Twój adres email',
+      detailsFollowing: 'ze wszystkimi szczegółami rezerwacji.',
+      thanks: 'Dziękujemy za wybór naszej usługi, czekamy na Twoją wizytę!',
+      questions: 'Jeśli masz jakiekolwiek pytania, skontaktuj się z nami.'
     },
     error: {
-      message: 'Wystąpił błąd podczas składania rezerwacji. Spróbuj ponownie.'
+      title: 'Błąd rezerwacji',
+      message: 'Wystąpił błąd podczas przetwarzania rezerwacji. Spróbuj ponownie.',
+      contact: 'Jeśli problem będzie się powtarzał, skontaktuj się z naszym wsparciem.'
     },
     calendar: {
       monthNames: 'Styczeń_Luty_Marzec_Kwiecień_Maj_Czerwiec_Lipiec_Sierpień_Wrzesień_Październik_Listopad_Grudzień',

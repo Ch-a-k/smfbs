@@ -1,150 +1,64 @@
-'use client';
+"use client"
 
-import * as React from 'react';
-import { format } from 'date-fns';
-import { pl } from 'date-fns/locale';
+import * as React from "react"
+import { DayPicker } from "react-day-picker"
+import { ChevronLeft, ChevronRight } from "lucide-react"
+import { pl } from "date-fns/locale"
 
-interface CalendarProps {
-  mode?: 'single' | 'range' | 'multiple';
-  selected?: Date | Date[] | undefined;
-  onSelect?: (date: Date | undefined) => void;
-  className?: string;
-}
+import { cn } from "@/lib/utils"
+import { buttonVariants } from "@/components/ui/button"
 
-export function Calendar({
-  mode = 'single',
-  selected,
-  onSelect,
-  className = '',
+export type CalendarProps = React.ComponentProps<typeof DayPicker>
+
+function Calendar({
+  className,
+  classNames,
+  showOutsideDays = true,
+  ...props
 }: CalendarProps) {
-  // Упрощенная реализация календаря
-  const today = new Date();
-  const month = selected instanceof Date ? selected : today;
-  const [currentMonth, setCurrentMonth] = React.useState(month);
-  
-  // Получаем первый день месяца
-  const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-  // Получаем последний день месяца
-  const lastDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
-  
-  // Получаем первый день для отображения (может быть из предыдущего месяца)
-  const firstDayToDisplay = new Date(firstDayOfMonth);
-  firstDayToDisplay.setDate(firstDayToDisplay.getDate() - firstDayOfMonth.getDay() + 1);
-  if (firstDayToDisplay.getDay() === 0) { // Если это воскресенье, отступаем еще на неделю
-    firstDayToDisplay.setDate(firstDayToDisplay.getDate() - 7);
-  }
-  
-  // Получаем дни для отображения
-  const daysToDisplay: Date[] = [];
-  for (let i = 0; i < 42; i++) { // 6 недель по 7 дней
-    const date = new Date(firstDayToDisplay);
-    date.setDate(date.getDate() + i);
-    daysToDisplay.push(date);
-  }
-  
-  // Функция для проверки, выбрана ли дата
-  const isSelected = (date: Date) => {
-    if (!selected) return false;
-    
-    if (selected instanceof Date) {
-      return date.toDateString() === selected.toDateString();
-    }
-    
-    if (Array.isArray(selected)) {
-      return selected.some(s => date.toDateString() === s.toDateString());
-    }
-    
-    return false;
-  };
-  
-  // Функция для проверки, является ли дата сегодняшней
-  const isToday = (date: Date) => {
-    return date.toDateString() === today.toDateString();
-  };
-  
-  // Функция для проверки, принадлежит ли дата текущему месяцу
-  const isCurrentMonth = (date: Date) => {
-    return date.getMonth() === currentMonth.getMonth();
-  };
-  
-  // Обработчик выбора даты
-  const handleSelect = (date: Date) => {
-    if (onSelect) {
-      if (isSelected(date)) {
-        onSelect(undefined);
-      } else {
-        onSelect(date);
-      }
-    }
-  };
-  
-  // Переход к предыдущему месяцу
-  const previousMonth = () => {
-    setCurrentMonth(prev => {
-      const newDate = new Date(prev);
-      newDate.setMonth(newDate.getMonth() - 1);
-      return newDate;
-    });
-  };
-  
-  // Переход к следующему месяцу
-  const nextMonth = () => {
-    setCurrentMonth(prev => {
-      const newDate = new Date(prev);
-      newDate.setMonth(newDate.getMonth() + 1);
-      return newDate;
-    });
-  };
-  
   return (
-    <div className={`p-3 ${className}`}>
-      <div className="flex justify-between mb-4">
-        <button
-          type="button"
-          onClick={previousMonth}
-          className="p-2 hover:bg-gray-700 rounded-full transition-colors"
-        >
-          &lsaquo;
-        </button>
-        <div className="font-semibold">
-          {format(currentMonth, 'LLLL yyyy', { locale: pl })}
-        </div>
-        <button
-          type="button"
-          onClick={nextMonth}
-          className="p-2 hover:bg-gray-700 rounded-full transition-colors"
-        >
-          &rsaquo;
-        </button>
-      </div>
-      
-      <div className="grid grid-cols-7 gap-1 mb-2">
-        {['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'So', 'Nd'].map(day => (
-          <div key={day} className="text-center text-xs text-gray-400 py-1">
-            {day}
-          </div>
-        ))}
-      </div>
-      
-      <div className="grid grid-cols-7 gap-1">
-        {daysToDisplay.map((date, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => handleSelect(date)}
-            disabled={!isCurrentMonth(date)}
-            className={`
-              h-9 w-9 text-center rounded-full
-              ${isCurrentMonth(date) ? 'text-white' : 'text-gray-500 opacity-50'} 
-              ${isSelected(date) ? 'bg-amber-500 text-white hover:bg-amber-600' : ''}
-              ${isToday(date) && !isSelected(date) ? 'border border-amber-500' : ''}
-              ${isCurrentMonth(date) && !isSelected(date) ? 'hover:bg-gray-700' : ''}
-            `}
-          >
-            {date.getDate()}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-} 
+    <DayPicker
+      locale={pl}
+      showOutsideDays={showOutsideDays}
+      className={cn("p-3", className)}
+      classNames={{
+        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
+        month: "space-y-4",
+        caption: "flex justify-center pt-1 relative items-center",
+        caption_label: "text-sm font-medium text-[#e0e0e0]",
+        nav: "space-x-1 flex items-center",
+        nav_button: cn(
+          buttonVariants({ variant: "outline" }),
+          "h-7 w-7 bg-transparent p-0 text-[#e0e0e0] border-[#3a3637] hover:bg-[#2a2627] hover:text-white"
+        ),
+        nav_button_previous: "absolute left-1",
+        nav_button_next: "absolute right-1",
+        table: "w-full border-collapse space-y-1",
+        head_row: "flex",
+        head_cell:
+          "text-[#a0a0a0] rounded-md w-9 font-normal text-[0.8rem]",
+        row: "flex w-full mt-2",
+        cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-[#2a2627]/50 [&:has([aria-selected])]:bg-[#2a2627] first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+        day: cn(
+          buttonVariants({ variant: "ghost" }),
+          "h-9 w-9 p-0 font-normal text-[#e0e0e0] hover:text-white hover:bg-[#2a2627] aria-selected:opacity-100"
+        ),
+        day_range_end: "day-range-end",
+        day_selected:
+          "bg-[#f36e21] text-white hover:bg-[#e05e11] hover:text-white focus:bg-[#f36e21] focus:text-white",
+        day_today: "bg-[#2a2627] text-white",
+        day_outside:
+          "day-outside text-[#a0a0a0] opacity-50 aria-selected:bg-[#2a2627]/50 aria-selected:text-[#a0a0a0] aria-selected:opacity-30",
+        day_disabled: "text-[#a0a0a0] opacity-50",
+        day_range_middle:
+          "aria-selected:bg-[#2a2627] aria-selected:text-white",
+        day_hidden: "invisible",
+        ...classNames,
+      }}
+      {...props}
+    />
+  )
+}
+Calendar.displayName = "Calendar"
+
+export { Calendar }
