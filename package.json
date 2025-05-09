@@ -27,7 +27,7 @@
     "@react-three/drei": "^9.121.5",
     "@react-three/fiber": "^8.17.14",
     "@supabase/auth-helpers-nextjs": "^0.8.7",
-    "@supabase/ssr": "^0.0.10",
+    "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.39.6",
     "@tanstack/react-table": "^8.21.3",
     "@tsparticles/all": "^3.8.1",
