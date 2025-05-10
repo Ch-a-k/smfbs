@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { 
   Dialog, 
@@ -14,99 +14,35 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Star, Search, Plus, Edit, Trash2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import Link from "next/link";
+import Cookies from "universal-cookie";
 
 // Типы для клиентов
 interface Customer {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  notes?: string;
-  bookingsCount: number;
-  totalSpent: number;
-  firstBookingDate: Date;
-  lastBookingDate: Date;
-  isVip: boolean;
-}
-
-interface CustomerFormData {
-  id?: string;
+  id: number;
   name: string;
   email: string;
   phone: string;
   notes: string;
-  isVip: boolean;
+  bookings_count: number;
+  total_spent: number;
+  last_visit: string;
+  is_vip: boolean;
 }
 
-// Моковые данные клиентов для фронтенда
-const initialCustomers: Customer[] = [
-  {
-    id: '1',
-    name: 'Иван Петров',
-    email: 'ivan@example.com',
-    phone: '+48123456789',
-    notes: 'Предпочитает сложные комнаты',
-    bookingsCount: 5,
-    totalSpent: 2500,
-    firstBookingDate: new Date(2023, 1, 15),
-    lastBookingDate: new Date(2024, 2, 20),
-    isVip: true
-  },
-  {
-    id: '2',
-    name: 'Мария Сидорова',
-    email: 'maria@example.com',
-    phone: '+48987654321',
-    notes: '',
-    bookingsCount: 3,
-    totalSpent: 1500,
-    firstBookingDate: new Date(2023, 3, 10),
-    lastBookingDate: new Date(2024, 1, 5),
-    isVip: false
-  },
-  {
-    id: '3',
-    name: 'Алексей Иванов',
-    email: 'alex@example.com',
-    phone: '+48555666777',
-    notes: 'Аллергия на пыль',
-    bookingsCount: 1,
-    totalSpent: 300,
-    firstBookingDate: new Date(2024, 1, 25),
-    lastBookingDate: new Date(2024, 1, 25),
-    isVip: false
-  },
-  {
-    id: '4',
-    name: 'Екатерина Новикова',
-    email: 'kate@example.com',
-    phone: '+48111222333',
-    notes: 'Предпочитает бронировать на утро',
-    bookingsCount: 8,
-    totalSpent: 4000,
-    firstBookingDate: new Date(2022, 11, 5),
-    lastBookingDate: new Date(2024, 2, 15),
-    isVip: true
-  },
-  {
-    id: '5',
-    name: 'Дмитрий Смирнов',
-    email: 'dmitry@example.com',
-    phone: '+48444555666',
-    notes: '',
-    bookingsCount: 2,
-    totalSpent: 900,
-    firstBookingDate: new Date(2023, 9, 20),
-    lastBookingDate: new Date(2024, 0, 10),
-    isVip: false
-  }
-];
+interface CustomerFormData {
+  id?: number;
+  name: string;
+  email: string;
+  phone: string;
+  notes: string;
+  is_vip: boolean;
+  password?: string;
+}
 
 // Форматирование даты для отображения
-const formatDate = (date: Date) => {
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
   return date.toLocaleDateString('ru-RU', {
     day: '2-digit',
     month: '2-digit',
@@ -115,7 +51,7 @@ const formatDate = (date: Date) => {
 };
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentCustomer, setCurrentCustomer] = useState<CustomerFormData>({
@@ -123,10 +59,64 @@ export default function CustomersPage() {
     email: '',
     phone: '',
     notes: '',
-    isVip: false
+    is_vip: false,
+    password: ''
   });
   const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+const cookies = new Cookies();
+const accessToken = cookies.get('access_token');
+
+  const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      // Попытка безопасно извлечь ошибку
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        throw new Error(`Ошибка: ${response.status}`);
+      }
+      throw new Error(errorData.detail || 'Произошла ошибка');
+    }
+
+    // Если статус 204, значит контента нет — возвращаем специальный флаг или null
+    if (response.status === 204) {
+      return null;
+    }
+
+    return response.json();
+  };
+
+  // Загрузка клиентов с сервера
+  const fetchCustomers = async () => {
+    try {
+      setIsLoading(true);
+      const data = await fetchWithAuth('http://localhost:89/api/customers');
+      setCustomers(data);
+    } catch (error) {
+      toast({
+        title: "Ошибка загрузки",
+        description: error instanceof Error ? error.message : "Не удалось загрузить клиентов",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
 
   // Обработчик изменения полей формы
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -144,8 +134,8 @@ export default function CustomersPage() {
         name: customer.name,
         email: customer.email,
         phone: customer.phone,
-        notes: customer.notes || '',
-        isVip: customer.isVip
+        notes: customer.notes,
+        is_vip: customer.is_vip
       });
       setIsEditing(true);
     } else {
@@ -154,69 +144,86 @@ export default function CustomersPage() {
         email: '',
         phone: '',
         notes: '',
-        isVip: false
+        is_vip: false,
+        password: ''
       });
       setIsEditing(false);
     }
     setIsDialogOpen(true);
   };
 
-  const handleDeleteCustomer = (id: string) => {
+  const handleDeleteCustomer = async (id: number) => {
     if (confirm('Вы уверены, что хотите удалить этого клиента?')) {
-      setCustomers(customers.filter(customer => customer.id !== id));
-      toast({
-        title: "Клиент удален",
-        description: "Клиент был успешно удален из системы.",
-        variant: "destructive",
-      });
+      try {
+        console.log('Deleting customer with ID:', id);
+        await fetchWithAuth(`http://localhost:89/api/customers/${id}`, {
+          method: 'DELETE'
+        });
+        await fetchCustomers();
+        toast({
+          title: "Клиент удален",
+          description: "Клиент был успешно удален из системы.",
+          variant: "default",
+        });
+      } catch (error) {
+        toast({
+          title: "Ошибка удаления",
+          description: error instanceof Error ? error.message : "Не удалось удалить клиента",
+          variant: "destructive",
+        });
+      }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (isEditing) {
-      // Обновляем существующего клиента
-      setCustomers(customers.map(customer => 
-        customer.id === currentCustomer.id 
-          ? {
-              ...customer,
-              name: currentCustomer.name,
-              email: currentCustomer.email,
-              phone: currentCustomer.phone,
-              notes: currentCustomer.notes,
-              isVip: currentCustomer.isVip
-            } 
-          : customer
-      ));
+    try {
+      if (isEditing && currentCustomer.id) {
+        // Обновляем существующего клиента
+        await fetchWithAuth(`http://localhost:89/api/customers/${currentCustomer.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            full_name: currentCustomer.name,
+            is_vip: currentCustomer.is_vip,
+            notes: currentCustomer.notes,
+            phone: currentCustomer.phone
+          })
+        });
+        toast({
+          title: "Клиент обновлен",
+          description: `Данные клиента "${currentCustomer.name}" успешно обновлены.`,
+          variant: "default",
+        });
+      } else {
+        // Добавляем нового клиента
+        await fetchWithAuth('http://localhost:89/api/customers', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: currentCustomer.name,
+            email: currentCustomer.email,
+            phone: currentCustomer.phone,
+            notes: currentCustomer.notes,
+            is_vip: currentCustomer.is_vip,
+            password: currentCustomer.password || 'defaultPassword' // В реальном приложении нужно запрашивать пароль
+          })
+        });
+        toast({
+          title: "Клиент добавлен",
+          description: `Клиент "${currentCustomer.name}" успешно добавлен.`,
+          variant: "default",
+        });
+      }
+      
+      setIsDialogOpen(false);
+      await fetchCustomers();
+    } catch (error) {
       toast({
-        title: "Клиент обновлен",
-        description: `Данные клиента "${currentCustomer.name}" успешно обновлены.`,
-        variant: "default",
-      });
-    } else {
-      // Добавляем нового клиента
-      const newCustomer: Customer = {
-        id: Math.random().toString(36).substr(2, 9),
-        name: currentCustomer.name,
-        email: currentCustomer.email,
-        phone: currentCustomer.phone,
-        notes: currentCustomer.notes,
-        isVip: currentCustomer.isVip,
-        bookingsCount: 0,
-        totalSpent: 0,
-        firstBookingDate: new Date(),
-        lastBookingDate: new Date()
-      };
-      setCustomers([...customers, newCustomer]);
-      toast({
-        title: "Клиент добавлен",
-        description: `Клиент "${currentCustomer.name}" успешно добавлен.`,
-        variant: "default",
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : "Произошла ошибка при сохранении",
+        variant: "destructive",
       });
     }
-    
-    setIsDialogOpen(false);
   };
 
   // Фильтрация клиентов по поисковому запросу
@@ -225,6 +232,10 @@ export default function CustomersPage() {
     customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     customer.phone.includes(searchTerm)
   );
+
+  if (isLoading) {
+    return <div className="p-6 text-[#e0e0e0]">Загрузка...</div>;
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -258,8 +269,8 @@ export default function CustomersPage() {
               <div>Контакты</div>
               <div>Бронирований</div>
               <div>Потрачено</div>
-              <div>Первый визит</div>
               <div>Последний визит</div>
+              <div>VIP</div>
               <div className="text-right">Действия</div>
             </div>
             
@@ -268,7 +279,7 @@ export default function CustomersPage() {
                 {filteredCustomers.map((customer) => (
                   <div key={customer.id} className="grid grid-cols-7 p-3 text-sm text-[#e0e0e0] items-center">
                     <div className="flex items-center gap-2">
-                      {customer.isVip && (
+                      {customer.is_vip && (
                         <Star className="h-4 w-4 text-[#f36e21]" />
                       )}
                       <span>{customer.name}</span>
@@ -277,10 +288,10 @@ export default function CustomersPage() {
                       <div>{customer.email}</div>
                       <div>{customer.phone}</div>
                     </div>
-                    <div>{customer.bookingsCount}</div>
-                    <div>{customer.totalSpent} zł</div>
-                    <div>{formatDate(customer.firstBookingDate)}</div>
-                    <div>{formatDate(customer.lastBookingDate)}</div>
+                    <div>{customer.bookings_count}</div>
+                    <div>{customer.total_spent} zł</div>
+                    <div>{customer.last_visit ? formatDate(customer.last_visit) : 'Нет данных'}</div>
+                    <div>{customer.is_vip ? 'Да' : 'Нет'}</div>
                     <div className="flex justify-end gap-2">
                       <Button
                         onClick={() => handleOpenDialog(customer)}
@@ -347,6 +358,7 @@ export default function CustomersPage() {
                     placeholder="email@example.com"
                     className="bg-[#1a1718] border-[#3a3637] text-[#e0e0e0]"
                     required
+                    disabled={isEditing}
                   />
                 </div>
                 <div className="space-y-2">
@@ -362,6 +374,21 @@ export default function CustomersPage() {
                   />
                 </div>
               </div>
+              {!isEditing && (
+                <div className="space-y-2">
+                  <Label htmlFor="password">Пароль</Label>
+                  <Input 
+                    id="password"
+                    name="password"
+                    type="password"
+                    value={currentCustomer.password || ''}
+                    onChange={handleInputChange}
+                    placeholder="Введите пароль"
+                    className="bg-[#1a1718] border-[#3a3637] text-[#e0e0e0]"
+                    required={!isEditing}
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="notes">Примечания</Label>
                 <Input 
@@ -376,13 +403,13 @@ export default function CustomersPage() {
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
-                  id="isVip"
-                  name="isVip"
-                  checked={currentCustomer.isVip}
+                  id="is_vip"
+                  name="is_vip"
+                  checked={currentCustomer.is_vip}
                   onChange={handleInputChange}
                   className="h-4 w-4 rounded border-[#3a3637] text-[#f36e21]"
                 />
-                <Label htmlFor="isVip" className="flex items-center">
+                <Label htmlFor="is_vip" className="flex items-center">
                   <Star className="h-4 w-4 text-[#f36e21] mr-1" /> VIP клиент
                 </Label>
               </div>
