@@ -1,231 +1,110 @@
+// /app/api/users/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { User } from '@/types/auth';
 
-// In a real application, this would be stored in a database
-// For demonstration purposes, we're using an in-memory array
-export let users: (User & { password: string; id: string })[] = [
-  {
-    id: '1',
-    username: 'admin',
-    password: 'admin123', // In a real app, this would be hashed
-    role: 'admin',
-    name: 'Администратор'
+const API_BASE_URL = 'http://localhost:89/api';
+
+// Универсальный fetch с авторизацией
+async function authFetch(
+  request: NextRequest,
+  endpoint: string,
+  method: string = 'GET',
+  body?: any
+) {
+  const token = request.cookies.get('access_token')?.value;
+
+  if (!token) {
+    throw new Error('Authentication required');
   }
-];
+  const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+    body: body ? JSON.stringify(body) : undefined,
+  });
 
-// Get all users or a specific user by id
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.detail || 'Request failed');
+  }
+
+  return res;
+}
+
+// Получение пользователей
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    const username = searchParams.get('username');
-    
-    // Check if the request is authenticated as admin
-    const userCookie = request.cookies.get('user')?.value;
-    if (!userCookie) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // If searching by username
-    if (username) {
-      const user = users.find(user => user.username === username);
-      if (user) {
-        // Don't send password in response
-        const { password, ...userWithoutPassword } = user;
-        return NextResponse.json([userWithoutPassword]);
-      }
-      return NextResponse.json([]);
-    }
-
-    // If searching by ID
-    if (id) {
-      const user = users.find(user => user.id === id);
-      if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-      }
-      
-      // Don't send password in response
-      const { password, ...userWithoutPassword } = user;
-      return NextResponse.json(userWithoutPassword);
-    }
-
-    // Check if the user making the request is an admin for listing all users
-    const requestingUser = users.find(user => user.username === userCookie);
-    if (!requestingUser || requestingUser.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
-
-    // Return all users without passwords
-    const usersWithoutPasswords = users.map(({ password, ...user }) => user);
-    return NextResponse.json(usersWithoutPasswords);
+    const id = new URL(request.url).searchParams.get('id');
+    const res = await authFetch(request, id ? `/users/${id}` : '/users');
+    const data = await res.json();
+    return NextResponse.json(data);
   } catch (error: any) {
-    console.error('Error getting users:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('GET Error:', error.message);
+    return error.message.includes('Authentication')
+      ? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      : error.message.includes('not found')
+      ? NextResponse.json({ error: 'Not found' }, { status: 404 })
+      : NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
   }
 }
 
-// Create a new user
+// Создание пользователя
 export async function POST(request: NextRequest) {
   try {
-    // Check if the request is authenticated as admin
-    const userCookie = request.cookies.get('user')?.value;
-    if (!userCookie) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if the user making the request is an admin
-    const requestingUser = users.find(user => user.username === userCookie);
-    if (!requestingUser || requestingUser.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
-
     const userData = await request.json();
-    
-    // Validate required fields
-    if (!userData.username || !userData.password || !userData.name || !userData.role) {
-      return NextResponse.json(
-        { error: 'Username, password, name, and role are required' }, 
-        { status: 400 }
-      );
+
+    if (!userData?.username || !userData?.password || !userData?.email) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
-    
-    // Check if username already exists
-    if (users.some(user => user.username === userData.username)) {
-      return NextResponse.json(
-        { error: 'Username already exists' }, 
-        { status: 409 }
-      );
-    }
-    
-    // Create new user
-    const newUser = {
-      id: Date.now().toString(),
-      username: userData.username,
-      password: userData.password, // In a real app, this would be hashed
-      role: userData.role,
-      name: userData.name
-    };
-    
-    users.push(newUser);
-    
-    // Return user without password
-    const { password, ...userWithoutPassword } = newUser;
-    return NextResponse.json(userWithoutPassword, { status: 201 });
+
+    const res = await authFetch(request, '/users', 'POST', userData);
+    const data = await res.json();
+    return NextResponse.json(data, { status: 201 });
   } catch (error: any) {
-    console.error('Error creating user:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('POST Error:', error.message);
+    return error.message.includes('already registered')
+      ? NextResponse.json({ error: 'User exists' }, { status: 409 })
+      : NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
   }
 }
 
-// Update an existing user
+// Обновление пользователя
 export async function PUT(request: NextRequest) {
   try {
-    // Check if the request is authenticated as admin
-    const userCookie = request.cookies.get('user')?.value;
-    if (!userCookie) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if the user making the request is an admin
-    const requestingUser = users.find(user => user.username === userCookie);
-    if (!requestingUser || requestingUser.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
-
     const userData = await request.json();
-    
-    if (!userData.id) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+
+    if (!userData?.id) {
+      return NextResponse.json({ error: 'User ID required' }, { status: 400 });
     }
-    
-    const userIndex = users.findIndex(user => user.id === userData.id);
-    if (userIndex === -1) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-    
-    // Check if it's the super admin (first user)
-    if (userData.id === '1' && (userData.role !== 'admin' || userData.username !== 'admin')) {
-      return NextResponse.json(
-        { error: 'Cannot change role or username of super admin' }, 
-        { status: 403 }
-      );
-    }
-    
-    // Check if username is being changed and if it already exists
-    if (
-      userData.username !== users[userIndex].username && 
-      users.some(user => user.username === userData.username)
-    ) {
-      return NextResponse.json(
-        { error: 'Username already exists' }, 
-        { status: 409 }
-      );
-    }
-    
-    // Update user
-    const updatedUser = {
-      ...users[userIndex],
-      username: userData.username || users[userIndex].username,
-      name: userData.name || users[userIndex].name,
-      role: userData.role || users[userIndex].role
-    };
-    
-    // Update password only if provided
-    if (userData.password) {
-      updatedUser.password = userData.password; // In a real app, this would be hashed
-    }
-    
-    users[userIndex] = updatedUser;
-    
-    // Return user without password
-    const { password, ...userWithoutPassword } = updatedUser;
-    return NextResponse.json(userWithoutPassword);
+
+    const res = await authFetch(request, `/users/${userData.id}`, 'PUT', userData);
+    const data = await res.json();
+    return NextResponse.json(data);
   } catch (error: any) {
-    console.error('Error updating user:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('PUT Error:', error.message);
+    return error.message.includes('not found')
+      ? NextResponse.json({ error: 'User not found' }, { status: 404 })
+      : NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
   }
 }
 
-// Delete a user
+// Удаление пользователя
 export async function DELETE(request: NextRequest) {
   try {
-    // Check if the request is authenticated as admin
-    const userCookie = request.cookies.get('user')?.value;
-    if (!userCookie) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if the user making the request is an admin
-    const requestingUser = users.find(user => user.username === userCookie);
-    if (!requestingUser || requestingUser.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    
+    const id = new URL(request.url).searchParams.get('id');
     if (!id) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+      return NextResponse.json({ error: 'User ID required' }, { status: 400 });
     }
-    
-    // Prevent deletion of super admin
-    if (id === '1') {
-      return NextResponse.json(
-        { error: 'Cannot delete super admin' }, 
-        { status: 403 }
-      );
-    }
-    
-    const initialLength = users.length;
-    users = users.filter(user => user.id !== id);
-    
-    if (users.length === initialLength) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-    
-    return NextResponse.json({ success: true });
+
+    await authFetch(request, `/users/${id}`, 'DELETE');
+    return new NextResponse(null, { status: 204 });
   } catch (error: any) {
-    console.error('Error deleting user:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('DELETE Error:', error.message);
+    return error.message.includes('not found')
+      ? NextResponse.json({ error: 'Not found' }, { status: 404 })
+      : NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
   }
 }

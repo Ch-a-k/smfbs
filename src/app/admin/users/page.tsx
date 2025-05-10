@@ -4,164 +4,196 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { Loader2, Pencil, Trash2, UserPlus } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { User } from '@/types/auth';
 
-type UserWithoutPassword = Omit<User, 'password'> & { id: string };
-type UserFormData = Omit<User, 'id'> & { password?: string; id?: string };
+interface UserOut {
+  id: number;
+  username: string;
+  email: string;
+  full_name: string;
+  is_admin: boolean;
+  is_superuser: boolean;
+}
+
+interface UserCreate {
+  username: string;
+  email: string;
+  full_name: string;
+  is_admin: boolean;
+  is_superuser: boolean;
+  password: string;
+}
+
+interface UserUpdate {
+  username: string;
+  email: string;
+  full_name: string;
+  is_admin: boolean;
+  is_superuser: boolean;
+  password?: string;
+}
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<UserWithoutPassword[]>([]);
+  const [users, setUsers] = useState<UserOut[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<UserFormData>({
+  const [formData, setFormData] = useState<UserCreate>({
     username: '',
-    name: '',
-    role: 'admin',
-    password: '',
+    email: '',
+    full_name: '',
+    is_admin: false,
+    is_superuser: false,
+    password: ''
   });
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const { toast } = useToast();
 
-  // Fetch users on component mount
   useEffect(() => {
     fetchUsers();
   }, []);
 
+  const getToken = () => {
+    const match = document.cookie.match(/(?:^|;\s*)access_token=([^;]*)/);
+    console.log('Cookie:', document.cookie);
+    return match ? decodeURIComponent(match[1]) : null;
+  };
+
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/users');
-      if (!response.ok) {
-        throw new Error('Failed to fetch users');
-      }
-      const data = await response.json();
+      const res = await fetch('/api/users');
+      if (!res.ok) throw new Error('Failed to fetch users');
+      const data: UserOut[] = await res.json();
       setUsers(data);
-    } catch (error) {
-      console.error('Error fetching users:', error);
+    } catch (err) {
       toast({
-        title: 'Ошибка',
-        description: 'Не удалось загрузить список пользователей. Пожалуйста, попробуйте еще раз.',
-        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to load users',
+        variant: 'destructive'
       });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleOpenDialog = (user?: UserWithoutPassword) => {
+  const handleOpenDialog = (user?: UserOut) => {
     if (user) {
       setFormData({
         username: user.username,
-        name: user.name,
-        role: user.role,
+        email: user.email,
+        full_name: user.full_name,
+        is_admin: user.is_admin,
+        is_superuser: user.is_superuser,
+        password: ''
       });
       setCurrentUserId(user.id);
     } else {
       setFormData({
         username: '',
-        name: '',
-        role: 'admin',
-        password: '',
+        email: '',
+        full_name: '',
+        is_admin: false,
+        is_superuser: false,
+        password: ''
       });
       setCurrentUserId(null);
     }
     setIsDialogOpen(true);
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleRoleChange = (value: 'admin' | 'user') => {
-    setFormData((prev) => ({ ...prev, role: value }));
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    const token = getToken();
 
     try {
-      // Validate form data
-      if (!formData.username || !formData.name || !formData.role) {
-        throw new Error('Пожалуйста, заполните все обязательные поля');
-      }
-
-      if (!currentUserId && !formData.password) {
-        throw new Error('Пароль обязателен для новых пользователей');
-      }
-
+      const url = currentUserId
+        ? `http://localhost:89/api/users/${currentUserId}`
+        : 'http://localhost:89/api/users';
       const method = currentUserId ? 'PUT' : 'POST';
-      const url = '/api/users';
-      const body = currentUserId
-        ? { ...formData, id: currentUserId }
-        : formData;
-
-      const response = await fetch(url, {
+      const payload = currentUserId
+        ? ({ ...formData, password: formData.password || undefined } as UserUpdate)
+        : (formData as UserCreate);
+      console.log('Deleting user with ID:', formData);
+      console.log('Using token:', token);
+      const res = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload)
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Не удалось сохранить пользователя');
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Request failed');
       }
 
       toast({
-        title: 'Успешно',
-        description: currentUserId
-          ? 'Пользователь успешно обновлен'
-          : 'Пользователь успешно создан',
+        title: 'Success',
+        description: currentUserId ? 'User updated' : 'User created'
       });
 
       setIsDialogOpen(false);
       fetchUsers();
-    } catch (error: any) {
+    } catch (err: any) {
       toast({
-        title: 'Ошибка',
-        description: error.message,
-        variant: 'destructive',
+        title: 'Error',
+        description: err.message,
+        variant: 'destructive'
       });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDeleteUser = async (id: string) => {
-    if (!confirm('Вы уверены, что хотите удалить этого пользователя?')) {
-      return;
-    }
-
+  const handleDeleteUser = async (id: number) => {
+    if (!confirm('Are you sure?')) return;
+    const token = getToken();
+    console.log('Deleting user with ID:', id);
+    console.log('Using token:', token);
     try {
-      const response = await fetch(`/api/users?id=${id}`, {
+      const res = await fetch(`http://localhost:89/api/users/${id}`, {
         method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Не удалось удалить пользователя');
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Delete failed');
       }
 
-      toast({
-        title: 'Успешно',
-        description: 'Пользователь успешно удален',
-      });
-
+      toast({ title: 'Deleted', description: 'User deleted' });
       fetchUsers();
-    } catch (error: any) {
+    } catch (err: any) {
       toast({
-        title: 'Ошибка',
-        description: error.message,
-        variant: 'destructive',
+        title: 'Error',
+        description: err.message,
+        variant: 'destructive'
       });
     }
   };
@@ -170,13 +202,13 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-[#ffffff]">Пользователи</h2>
-          <p className="text-[#a0a0a0]">
-            Управление пользователями и правами доступа
+          <h2 className="text-3xl font-bold tracking-tight">Users</h2>
+          <p className="text-muted-foreground">
+            Manage system users and permissions
           </p>
         </div>
         <Button onClick={() => handleOpenDialog()}>
-          <UserPlus className="mr-2 h-4 w-4" /> Добавить пользователя
+          <UserPlus className="mr-2 h-4 w-4" /> Add User
         </Button>
       </div>
 
@@ -185,34 +217,26 @@ export default function UsersPage() {
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
       ) : (
-        <div className="bg-[#2a2627] rounded-lg shadow overflow-hidden border border-[#3a3637]">
-          <table className="min-w-full divide-y divide-[#3a3637]">
-            <thead className="bg-[#1a1718]">
+        <div className="rounded-lg border shadow overflow-hidden">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-muted">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-[#a0a0a0] uppercase tracking-wider">
-                  Имя
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-[#a0a0a0] uppercase tracking-wider">
-                  Логин
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-[#a0a0a0] uppercase tracking-wider">
-                  Роль
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-[#a0a0a0] uppercase tracking-wider">
-                  Действия
-                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Username</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Role</th>
+                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#3a3637]">
+            <tbody className="divide-y divide-border">
               {users.map((user) => (
-                <tr key={user.id} className="hover:bg-[#3a3637]/30">
-                  <td className="px-6 py-4 whitespace-nowrap text-[#e0e0e0]">{user.name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-[#e0e0e0]">
-                    {user.username}
-                  </td>
+                <tr key={user.id} className="hover:bg-muted/50">
+                  <td className="px-6 py-4 whitespace-nowrap">{user.full_name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{user.email}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{user.username}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                      {user.role === 'admin' ? 'Администратор' : 'Пользователь'}
+                    <Badge variant={user.is_superuser ? 'default' : user.is_admin ? 'secondary' : 'outline'}>
+                      {user.is_superuser ? 'Superuser' : user.is_admin ? 'Admin' : 'User'}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -229,7 +253,7 @@ export default function UsersPage() {
                       size="sm"
                       onClick={() => handleDeleteUser(user.id)}
                       className="text-red-500 hover:text-red-700 hover:bg-red-100/10"
-                      disabled={user.username === 'admin'}
+                      disabled={user.is_superuser}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -238,11 +262,8 @@ export default function UsersPage() {
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={4}
-                    className="px-6 py-4 text-center text-[#a0a0a0]"
-                  >
-                    Пользователи не найдены
+                  <td colSpan={5} className="px-6 py-4 text-center text-muted-foreground">
+                    No users found
                   </td>
                 </tr>
               )}
@@ -252,65 +273,79 @@ export default function UsersPage() {
       )}
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="bg-[#2a2627] text-[#e0e0e0] border-[#3a3637]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-[#f36e21]">
-              {currentUserId ? 'Редактировать пользователя' : 'Добавить пользователя'}
-            </DialogTitle>
-            <DialogDescription className="text-[#a0a0a0]">
-              {currentUserId
-                ? 'Измените информацию о пользователе ниже'
-                : 'Заполните информацию для создания нового пользователя'}
+            <DialogTitle>{currentUserId ? 'Edit User' : 'Add User'}</DialogTitle>
+            <DialogDescription>
+              {currentUserId ? 'Update user info' : 'Create a new user'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Полное имя</Label>
+              <Label htmlFor="full_name">Full Name</Label>
               <Input
-                id="name"
-                name="name"
-                value={formData.name}
+                id="full_name"
+                name="full_name"
+                value={formData.full_name}
                 onChange={handleInputChange}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="username">Логин</Label>
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
                 name="username"
                 value={formData.username}
                 onChange={handleInputChange}
                 required
-                disabled={formData.username === 'admin'}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="role">Роль</Label>
-              <Select
-                value={formData.role}
-                onValueChange={handleRoleChange}
-                disabled={formData.username === 'admin'}
-              >
-                <SelectTrigger id="role">
-                  <SelectValue placeholder="Выберите роль" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Администратор</SelectItem>
-                  <SelectItem value="user">Пользователь</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <input
+                  id="is_admin"
+                  name="is_admin"
+                  type="checkbox"
+                  checked={formData.is_admin}
+                  onChange={handleInputChange}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="is_admin">Admin</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  id="is_superuser"
+                  name="is_superuser"
+                  type="checkbox"
+                  checked={formData.is_superuser}
+                  onChange={handleInputChange}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="is_superuser">Superuser</Label>
+              </div>
             </div>
             {!currentUserId && (
               <div className="space-y-2">
-                <Label htmlFor="password">Пароль</Label>
+                <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
                   name="password"
                   type="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  required={!currentUserId}
+                  required
                 />
               </div>
             )}
@@ -319,21 +354,16 @@ export default function UsersPage() {
                 type="button"
                 variant="outline"
                 onClick={() => setIsDialogOpen(false)}
-                className="bg-transparent border-[#3a3637] text-[#e0e0e0] hover:bg-[#3a3637]/50"
               >
-                Отмена
+                Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Сохранение...
+                    Saving...
                   </>
-                ) : currentUserId ? (
-                  'Сохранить'
-                ) : (
-                  'Создать'
-                )}
+                ) : currentUserId ? 'Save Changes' : 'Create User'}
               </Button>
             </DialogFooter>
           </form>
