@@ -1,125 +1,120 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { format, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Search, Plus, Trash2, Edit, Filter, Calendar } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import Link from 'next/link';
+import Cookies from 'universal-cookie';
 
-// Моковые данные бронирований
-const mockBookings = [
-  {
-    id: '1',
-    customerName: 'Иван Петров',
-    email: 'ivan@example.com',
-    phone: '+48123456789',
-    packageName: 'ŚREDNI',
-    date: new Date(2024, 2, 15, 14, 0),
-    duration: 120,
-    room: 'Комната 1',
-    status: 'paid',
-    totalPrice: 499
-  },
-  {
-    id: '2',
-    customerName: 'Анна Смирнова',
-    email: 'anna@example.com',
-    phone: '+48987654321',
-    packageName: 'TRUDNY',
-    date: new Date(2024, 2, 15, 17, 0),
-    duration: 180,
-    room: 'Комната 2',
-    status: 'deposit',
-    totalPrice: 999
-  },
-  {
-    id: '3',
-    customerName: 'Петр Сидоров',
-    email: 'petr@example.com',
-    phone: '+48555666777',
-    packageName: 'ŁATWY',
-    date: new Date(2024, 2, 16, 10, 0),
-    duration: 45,
-    room: 'Комната 1',
-    status: 'unpaid',
-    totalPrice: 299
-  },
-  {
-    id: '4',
-    customerName: 'Мария Иванова',
-    email: 'maria@example.com',
-    phone: '+48111222333',
-    packageName: 'BUŁKA Z MASŁEM',
-    date: new Date(2024, 2, 17, 12, 0),
-    duration: 30,
-    room: 'Комната 3',
-    status: 'paid',
-    totalPrice: 199
-  },
-  {
-    id: '5',
-    customerName: 'Алексей Кузнецов',
-    email: 'alex@example.com',
-    phone: '+48444555666',
-    packageName: 'ŚREDNI',
-    date: addDays(new Date(), 1),
-    duration: 120,
-    room: 'Комната 2',
-    status: 'paid',
-    totalPrice: 499
-  },
-  {
-    id: '6',
-    customerName: 'Ольга Новикова',
-    email: 'olga@example.com',
-    phone: '+48777888999',
-    packageName: 'TRUDNY',
-    date: addDays(new Date(), 2),
-    duration: 180,
-    room: 'Комната 1',
-    status: 'deposit',
-    totalPrice: 999
-  },
-  {
-    id: '7',
-    customerName: 'Дмитрий Смирнов',
-    email: 'dmitry@example.com',
-    phone: '+48333222111',
-    packageName: 'ŁATWY',
-    date: new Date(),
-    duration: 45,
-    room: 'Комната 3',
-    status: 'unpaid',
-    totalPrice: 299
-  }
-];
-
-// Функция для получения статуса оплаты
-const getStatusBadge = (status: string) => {
-  switch (status) {
-    case 'paid':
-      return <Badge className="bg-green-500">Оплачено</Badge>;
-    case 'deposit':
-      return <Badge className="bg-yellow-500">Задаток</Badge>;
-    case 'unpaid':
-      return <Badge className="bg-red-500">Не оплачено</Badge>;
-    default:
-      return null;
-  }
-};
+interface Booking {
+  id: number;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  package_id: number;
+  package_name: string;
+  booking_date: string;
+  start_time: string;
+  duration: number;
+  room_id: number;
+  room_name: string;
+  payment_status: 'pending' | 'paid' | 'partially_paid' | 'failed' | 'refunded';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  total_price: number;
+  paid_amount: number;
+  notes: string | null;
+}
 
 export default function BookingsPage() {
-  const [bookings, setBookings] = useState(mockBookings);
+  const cookies = new Cookies();
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [isFiltersVisible, setIsFiltersVisible] = useState(false);
+  const [paymentFilter, setPaymentFilter] = useState('all');
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${cookies.get('access_token')}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Произошла ошибка');
+    }
+    
+    if (response.status === 204) return null;
+    return response.json();
+  };
+
+  const fetchBookings = async () => {
+    try {
+      setIsLoading(true);
+      const data = await fetchWithAuth('http://localhost:89/api/bookings');
+      // Преобразуем данные для удобства отображения
+      const formattedData = data.map((booking: any) => ({
+        ...booking,
+        package_name: booking.package?.name || 'Неизвестно',
+        room_name: booking.room?.name || 'Неизвестно',
+        duration: calculateDuration(booking.start_time, booking.end_time)
+      }));
+      setBookings(formattedData);
+    } catch (error) {
+      toast({
+        title: "Ошибка загрузки",
+        description: error instanceof Error ? error.message : "Не удалось загрузить бронирования",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const calculateDuration = (start: string, end: string): number => {
+    const startDate = new Date(`2000-01-01T${start}`);
+    const endDate = new Date(`2000-01-01T${end}`);
+    return (endDate.getTime() - startDate.getTime()) / (1000 * 60);
+  };
+
+  const handleDeleteBooking = async (id: number) => {
+    if (confirm('Вы уверены, что хотите удалить это бронирование?')) {
+      try {
+        await fetchWithAuth(`http://localhost:89/api/bookings?id=${id}`, {
+          method: 'DELETE'
+        });
+        
+        setBookings(bookings.filter(booking => booking.id !== id));
+        toast({
+          title: "Бронирование удалено",
+          description: "Бронирование было успешно удалено.",
+          variant: "default"
+        });
+      } catch (error) {
+        toast({
+          title: "Ошибка удаления",
+          description: error instanceof Error ? error.message : "Не удалось удалить бронирование",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchBookings();
+  }, []);
 
   // Фильтрация бронирований
   const filteredBookings = bookings.filter(booking => {
@@ -128,13 +123,18 @@ export default function BookingsPage() {
       return false;
     }
     
+    // Фильтр по статусу оплаты
+    if (paymentFilter !== 'all' && booking.payment_status !== paymentFilter) {
+      return false;
+    }
+    
     // Поиск по имени, email или телефону
     if (searchTerm) {
       const searchTermLower = searchTerm.toLowerCase();
       return (
-        booking.customerName.toLowerCase().includes(searchTermLower) ||
-        booking.email.toLowerCase().includes(searchTermLower) ||
-        booking.phone.includes(searchTerm)
+        booking.customer_name.toLowerCase().includes(searchTermLower) ||
+        booking.customer_email.toLowerCase().includes(searchTermLower) ||
+        booking.customer_phone.includes(searchTerm)
       );
     }
     
@@ -143,27 +143,54 @@ export default function BookingsPage() {
 
   // Сортировка бронирований по дате (сначала новые)
   const sortedBookings = [...filteredBookings].sort((a, b) => 
-    b.date.getTime() - a.date.getTime()
+    new Date(b.booking_date).getTime() - new Date(a.booking_date).getTime()
   );
 
-  // Удаление бронирования
-  const handleDeleteBooking = (id: string) => {
-    setBookings(bookings.filter(booking => booking.id !== id));
-    toast({
-      title: "Бронирование удалено",
-      description: "Бронирование было успешно удалено.",
-    });
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'confirmed':
+        return <Badge className="bg-green-500">Подтверждено</Badge>;
+      case 'pending':
+        return <Badge className="bg-yellow-500">Ожидание</Badge>;
+      case 'cancelled':
+        return <Badge className="bg-red-500">Отменено</Badge>;
+      case 'completed':
+        return <Badge className="bg-blue-500">Завершено</Badge>;
+      default:
+        return <Badge>{status}</Badge>;
+    }
   };
 
-    return (
+  const getPaymentBadge = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return <Badge className="bg-green-500">Оплачено</Badge>;
+      case 'partially_paid':
+        return <Badge className="bg-yellow-500">Частично</Badge>;
+      case 'pending':
+        return <Badge className="bg-orange-500">Ожидание</Badge>;
+      case 'failed':
+        return <Badge className="bg-red-500">Ошибка</Badge>;
+      case 'refunded':
+        return <Badge className="bg-purple-500">Возврат</Badge>;
+      default:
+        return <Badge>{status}</Badge>;
+    }
+  };
+
+  if (isLoading) {
+    return <div className="p-6">Загрузка бронирований...</div>;
+  }
+
+  return (
     <div className="space-y-6 p-6">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Бронирования</h2>
           <p className="text-muted-foreground">
             Управление всеми бронированиями
-            </p>
-          </div>
+          </p>
+        </div>
         <div className="flex gap-2">
           <Button asChild>
             <Link href="/admin/calendar">
@@ -194,27 +221,33 @@ export default function BookingsPage() {
               />
             </div>
             <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setIsFiltersVisible(!isFiltersVisible)}
-              >
-                <Filter className="mr-2 h-4 w-4" />
-                Фильтры
-              </Button>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Статус брони" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все статусы</SelectItem>
+                  <SelectItem value="pending">Ожидание</SelectItem>
+                  <SelectItem value="confirmed">Подтверждено</SelectItem>
+                  <SelectItem value="cancelled">Отменено</SelectItem>
+                  <SelectItem value="completed">Завершено</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={paymentFilter} onValueChange={setPaymentFilter}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Статус оплаты" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Все статусы</SelectItem>
+                  <SelectItem value="all">Все оплаты</SelectItem>
+                  <SelectItem value="pending">Ожидание</SelectItem>
                   <SelectItem value="paid">Оплачено</SelectItem>
-                  <SelectItem value="deposit">Задаток</SelectItem>
-                  <SelectItem value="unpaid">Не оплачено</SelectItem>
+                  <SelectItem value="partially_paid">Частично</SelectItem>
+                  <SelectItem value="failed">Ошибка</SelectItem>
+                  <SelectItem value="refunded">Возврат</SelectItem>
                 </SelectContent>
               </Select>
-        </div>
-      </div>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {sortedBookings.length === 0 ? (
@@ -231,7 +264,8 @@ export default function BookingsPage() {
                     <th className="text-left py-3 px-4 font-medium text-foreground">Пакет</th>
                     <th className="text-left py-3 px-4 font-medium text-foreground">Комната</th>
                     <th className="text-left py-3 px-4 font-medium text-foreground">Статус</th>
-                    <th className="text-left py-3 px-4 font-medium text-foreground">Цена</th>
+                    <th className="text-left py-3 px-4 font-medium text-foreground">Оплата</th>
+                    <th className="text-left py-3 px-4 font-medium text-foreground">Сумма</th>
                     <th className="text-right py-3 px-4 font-medium text-foreground">Действия</th>
                   </tr>
                 </thead>
@@ -240,27 +274,45 @@ export default function BookingsPage() {
                     <tr key={booking.id} className="border-b border-border hover:bg-muted/50 animate-table-row">
                       <td className="py-3 px-4">
                         <div>
-                          <p className="font-medium text-foreground">{booking.customerName}</p>
-                          <p className="text-sm text-muted-foreground">{booking.email}</p>
-                          <p className="text-sm text-muted-foreground">{booking.phone}</p>
+                          <p className="font-medium text-foreground">{booking.customer_name}</p>
+                          <p className="text-sm text-muted-foreground">{booking.customer_email}</p>
+                          <p className="text-sm text-muted-foreground">{booking.customer_phone}</p>
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        <p className="text-foreground">{format(booking.date, 'dd.MM.yyyy')}</p>
-                        <p className="text-sm text-muted-foreground">{format(booking.date, 'HH:mm')}</p>
+                        <p className="text-foreground">
+                          {format(new Date(booking.booking_date), 'dd.MM.yyyy', { locale: ru })}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {booking.start_time} ({booking.duration} мин)
+                        </p>
                       </td>
-                      <td className="py-3 px-4 text-foreground">{booking.packageName}</td>
-                      <td className="py-3 px-4 text-foreground">{booking.room}</td>
+                      <td className="py-3 px-4 text-foreground">{booking.package_name}</td>
+                      <td className="py-3 px-4 text-foreground">{booking.room_name}</td>
                       <td className="py-3 px-4">
-                        {booking.status === 'paid' && <Badge variant="success">Оплачено</Badge>}
-                        {booking.status === 'deposit' && <Badge variant="warning">Задаток</Badge>}
-                        {booking.status === 'unpaid' && <Badge variant="destructive">Не оплачено</Badge>}
+                        {getStatusBadge(booking.status)}
                       </td>
-                      <td className="py-3 px-4 text-foreground font-medium">{booking.totalPrice} PLN</td>
+                      <td className="py-3 px-4">
+                        {getPaymentBadge(booking.payment_status)}
+                      </td>
+                      <td className="py-3 px-4 text-foreground font-medium">
+                        {booking.total_price} PLN
+                        {booking.paid_amount > 0 && (
+                          <span className="block text-sm text-muted-foreground">
+                            Оплачено: {booking.paid_amount} PLN
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end space-x-2">
-                          <Button variant="ghost" size="icon" className="hover:bg-muted">
-                            <Edit className="h-4 w-4" />
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            asChild
+                          >
+                            <Link href={`/admin/bookings/edit/${booking.id}`}>
+                              <Edit className="h-4 w-4" />
+                            </Link>
                           </Button>
                           <Button 
                             variant="ghost" 
@@ -276,10 +328,10 @@ export default function BookingsPage() {
                   ))}
                 </tbody>
               </table>
-        </div>
-      )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
   );
-} 
+}

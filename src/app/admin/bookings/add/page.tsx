@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,124 +9,309 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format } from 'date-fns';
-import { CalendarIcon, Check, User, Mail, Phone, Package, Clock, DoorOpen, CreditCard } from 'lucide-react';
+import { format, addMinutes } from 'date-fns';
+import { CalendarIcon, Check, User, Mail, Phone, Package, Clock, DoorOpen, CreditCard, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
+import Cookies from 'universal-cookie';
 
-// Определяем пакеты услуг
-const packages = [
-  {
-    id: 'trudny',
-    name: 'TRUDNY',
-    title: 'DO ZDEMOLOWANIA',
-    items: '35 szklanych przedmiotów, 5 meble, 8 sprzętów RTV i AGD, 10 mniejszych sprzętów RTV i AGD',
-    tools: 'ubranie, kask, rękawice',
-    capacity: '1-6 osób/do 180 min',
-    price: '999 PLN',
-    isBestseller: false
-  },
-  {
-    id: 'sredni',
-    name: 'ŚREDNI',
-    title: 'DO ZDEMOLOWANIA',
-    items: '30 szklanych przedmiotów, 3 meble, 5 sprzętów RTV i AGD',
-    tools: 'ubranie, kask, rękawice',
-    capacity: '1-4 osób/do 120 min',
-    price: '499 PLN',
-    isBestseller: true
-  },
-  {
-    id: 'latwy',
-    name: 'ŁATWY',
-    title: 'DO ZDEMOLOWANIA',
-    items: '25 szklanych przedmiotów, 2 meble, 3 sprzęty RTV i AGD',
-    tools: 'ubranie, kask, rękawice',
-    capacity: '1-2 osób/do 45 min',
-    price: '299 PLN',
-    isBestseller: false
-  },
-  {
-    id: 'bulka',
-    name: 'BUŁKA Z MASŁEM',
-    title: 'DO ZDEMOLOWANIA',
-    items: '25 szklanych przedmiotów',
-    tools: 'ubranie, kask, rękawice',
-    capacity: '1-2 osób/do 30 min',
-    price: '199 PLN',
-    isBestseller: false
-  }
-];
+// Enums matching backend
+enum BookingStatus {
+  PENDING = "pending",
+  CONFIRMED = "confirmed",
+  CANCELLED = "cancelled",
+  COMPLETED = "completed"
+}
 
-// Определяем доступные комнаты
-const rooms = [
-  { id: 'room1', name: 'Комната 1' },
-  { id: 'room2', name: 'Комната 2' },
-  { id: 'room3', name: 'Комната 3' }
-  { id: 'room4', name: 'Комната 4' }
-];
+enum PaymentStatus {
+  PENDING = "pending",
+  PAID = "paid",
+  PARTIALLY_PAID = "partially_paid",
+  FAILED = "failed",
+  REFUNDED = "refunded"
+}
 
-// Определяем доступные статусы оплаты
-const paymentStatuses = [
-  { id: 'paid', name: 'Полностью оплачен', color: 'success' },
-  { id: 'deposit', name: 'Задаток', color: 'warning' },
-  { id: 'unpaid', name: 'Не оплачен', color: 'destructive' }
-];
+// Interfaces matching backend models
+interface Package {
+  id: number;
+  name: string;
+  description: string;
+  price: number;
+  deposit_amount: number;
+  duration: number;
+  max_people: number;
+  is_active: boolean;
+  is_best_seller: boolean;
+}
 
-// Определяем доступные часы для бронирования
-const availableHours = Array.from({ length: 12 }, (_, i) => i + 9); // с 9:00 до 20:00
+interface Room {
+  id: number;
+  name: string;
+  capacity: number;
+  max_people: number;
+  is_active: boolean;
+  available: boolean;
+}
 
-interface FormData {
+interface Customer {
+  id: number;
   name: string;
   email: string;
   phone: string;
-  packageId: string;
-  date: Date | null;
-  time: string;
-  roomId: string;
-  paymentStatus: string;
+  is_vip: boolean;
+}
+
+interface StatusOption {
+  id: BookingStatus | PaymentStatus;
+  name: string;
+  color: 'default' | 'destructive' | 'success' | 'warning' | 'info';
 }
 
 export default function AddBookingPage() {
+  const cookies = new Cookies();
+  const [packages, setPackages] = useState<Package[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  const bookingStatusOptions: StatusOption[] = [
+    { id: BookingStatus.PENDING, name: 'Ожидание', color: 'warning' },
+    { id: BookingStatus.CONFIRMED, name: 'Подтверждено', color: 'success' },
+    { id: BookingStatus.CANCELLED, name: 'Отменено', color: 'destructive' },
+    { id: BookingStatus.COMPLETED, name: 'Завершено', color: 'default' }
+  ];
+
+  const paymentStatusOptions: StatusOption[] = [
+    { id: PaymentStatus.PENDING, name: 'Ожидание оплаты', color: 'warning' },
+    { id: PaymentStatus.PAID, name: 'Оплачено', color: 'success' },
+    { id: PaymentStatus.PARTIALLY_PAID, name: 'Частично оплачено', color: 'info' },
+    { id: PaymentStatus.FAILED, name: 'Ошибка оплаты', color: 'destructive' },
+    { id: PaymentStatus.REFUNDED, name: 'Возврат', color: 'default' }
+  ];
+
+  const availableHours = Array.from({ length: 12 }, (_, i) => i + 9); // 9:00 to 20:00
+
+  interface FormData {
+    customerId: number | null;
+    name: string;
+    email: string;
+    phone: string;
+    packageId: number | null;
+    bookingDate: Date | null;
+    startTime: string;
+    endTime: string;
+    roomId: number | null;
+    numPeople: number;
+    status: BookingStatus;
+    paymentStatus: PaymentStatus;
+    totalPrice: number;
+    paidAmount: number;
+    notes: string;
+  }
+
   const [formData, setFormData] = useState<FormData>({
+    customerId: null,
     name: '',
     email: '',
     phone: '',
-    packageId: '',
-    date: null,
-    time: '',
-    roomId: '',
-    paymentStatus: ''
+    packageId: null,
+    bookingDate: null,
+    startTime: '',
+    endTime: '',
+    roomId: null,
+    numPeople: 1,
+    status: BookingStatus.PENDING,
+    paymentStatus: PaymentStatus.PENDING,
+    totalPrice: 0,
+    paidAmount: 0,
+    notes: ''
   });
-  const { toast } = useToast();
+
+  const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${cookies.get('access_token')}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Произошла ошибка');
+    }
+    
+    return response.json();
+  };
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Fetch packages
+      const packagesData = await fetchWithAuth('http://localhost:89/api/packages');
+      setPackages(packagesData.filter((pkg: Package) => pkg.is_active));
+      
+      // Fetch rooms
+      const roomsData = await fetchWithAuth('http://localhost:89/api/rooms');
+      setRooms(roomsData.filter((room: Room) => room.is_active && room.available));
+      
+      // Fetch customers
+      const customersData = await fetchWithAuth('http://localhost:89/api/customers');
+      setCustomers(customersData);
+      
+    } catch (error) {
+      toast({
+        title: "Ошибка загрузки",
+        description: error instanceof Error ? error.message : "Не удалось загрузить данные",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    // Calculate end time when package or start time changes
+    if (formData.packageId && formData.startTime) {
+      const selectedPackage = packages.find(p => p.id === formData.packageId);
+      if (selectedPackage) {
+        const [hours, minutes] = formData.startTime.split(':').map(Number);
+        const startDate = new Date();
+        startDate.setHours(hours, minutes, 0, 0);
+        const endDate = addMinutes(startDate, selectedPackage.duration);
+        const endTime = format(endDate, 'HH:mm');
+        
+        setFormData(prev => ({
+          ...prev,
+          endTime,
+          totalPrice: selectedPackage.price,
+          paidAmount: selectedPackage.deposit_amount,
+          numPeople: Math.min(prev.numPeople, selectedPackage.max_people)
+        }));
+      }
+    }
+  }, [formData.packageId, formData.startTime, packages]);
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    
+    if (field === 'customerId') {
+      const selectedCustomer = customers.find(c => c.id === value);
+      if (selectedCustomer) {
+        setFormData(prev => ({
+          ...prev,
+          name: selectedCustomer.name,
+          email: selectedCustomer.email,
+          phone: selectedCustomer.phone
+        }));
+      }
+    }
+
+    if (field === 'packageId') {
+      const selectedPackage = packages.find(p => p.id === value);
+      if (selectedPackage) {
+        setFormData(prev => ({
+          ...prev,
+          totalPrice: selectedPackage.price,
+          paidAmount: selectedPackage.deposit_amount,
+          numPeople: Math.min(prev.numPeople, selectedPackage.max_people)
+        }));
+      }
+    }
+
+    if (field === 'numPeople') {
+      const num = parseInt(value) || 1;
+      if (formData.packageId) {
+        const selectedPackage = packages.find(p => p.id === formData.packageId);
+        if (selectedPackage) {
+          setFormData(prev => ({
+            ...prev,
+            numPeople: Math.min(num, selectedPackage.max_people)
+          }));
+          return;
+        }
+      }
+      setFormData(prev => ({ ...prev, numPeople: num }));
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Booking data:', formData);
-    // Здесь будет логика отправки данных на сервер
-    toast({
-      title: "Успешно!",
-      description: "Бронирование успешно добавлено",
-      variant: "default",
-    });
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      packageId: '',
-      date: null,
-      time: '',
-      roomId: '',
-      paymentStatus: ''
-    });
+    
+    try {
+      const bookingData = {
+        room_id: formData.roomId,
+        package_id: formData.packageId,
+        customer_name: formData.name,
+        customer_email: formData.email,
+        customer_phone: formData.phone,
+        booking_date: formData.bookingDate?.toISOString().split('T')[0],
+        start_time: formData.startTime,
+        end_time: formData.endTime,
+        num_people: formData.numPeople,
+        status: formData.status,
+        total_price: formData.totalPrice,
+        payment_status: formData.paymentStatus,
+        paid_amount: formData.paidAmount,
+        notes: formData.notes
+      };
+
+      await fetchWithAuth('http://localhost:89/api/bookings', {
+        method: 'POST',
+        body: JSON.stringify(bookingData)
+      });
+      
+      toast({
+        title: "Успешно!",
+        description: "Бронирование успешно добавлено",
+        variant: "default",
+      });
+      
+      // Reset form
+      setFormData({
+        customerId: null,
+        name: '',
+        email: '',
+        phone: '',
+        packageId: null,
+        bookingDate: null,
+        startTime: '',
+        endTime: '',
+        roomId: null,
+        numPeople: 1,
+        status: BookingStatus.PENDING,
+        paymentStatus: PaymentStatus.PENDING,
+        totalPrice: 0,
+        paidAmount: 0,
+        notes: ''
+      });
+      
+    } catch (error) {
+      toast({
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : "Не удалось создать бронирование",
+        variant: "destructive",
+      });
+    }
   };
 
-  // Получение информации о выбранном пакете
   const selectedPackage = formData.packageId ? packages.find(pkg => pkg.id === formData.packageId) : null;
+  const selectedRoom = formData.roomId ? rooms.find(room => room.id === formData.roomId) : null;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p>Загрузка данных...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -150,16 +335,31 @@ export default function AddBookingPage() {
               <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
+                    <Label htmlFor="customerId">Выбрать клиента</Label>
+                    <Select 
+                      value={formData.customerId?.toString() || ''}
+                      onValueChange={(value) => handleChange('customerId', parseInt(value))}
+                    >
+                      <SelectTrigger id="customerId" className="bg-background border-input">
+                        <SelectValue placeholder="Выберите клиента" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {customers.map((customer) => (
+                          <SelectItem key={customer.id} value={customer.id.toString()}>
+                            {customer.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="name">Имя клиента</Label>
                     <Input
                       id="name"
                       name="name"
                       value={formData.name}
                       onChange={(e) => handleChange('name', e.target.value)}
-                      className="bg-background border-input"
                       required
-                      aria-required="true"
-                      aria-label="Имя клиента"
                       placeholder="Введите имя клиента"
                     />
                   </div>
@@ -171,10 +371,7 @@ export default function AddBookingPage() {
                       type="email"
                       value={formData.email}
                       onChange={(e) => handleChange('email', e.target.value)}
-                      className="bg-background border-input"
                       required
-                      aria-required="true"
-                      aria-label="Email клиента"
                       placeholder="example@mail.com"
                     />
                   </div>
@@ -186,34 +383,39 @@ export default function AddBookingPage() {
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => handleChange('phone', e.target.value)}
-                      className="bg-background border-input"
                       required
-                      aria-required="true"
-                      aria-label="Телефон клиента"
                       placeholder="+48 123 456 789"
                     />
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="bg-muted/30">
+                <CardTitle className="flex items-center">
+                  <Package className="mr-2 h-5 w-5 text-primary" />
+                  Пакет услуг
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="packageId">Пакет услуг</Label>
                     <Select 
-                      name="packageId"
-                      value={formData.packageId} 
-                      onValueChange={(value) => handleChange('packageId', value)}
+                      value={formData.packageId?.toString() || ''}
+                      onValueChange={(value) => handleChange('packageId', parseInt(value))}
                       required
                     >
-                      <SelectTrigger 
-                        id="packageId"
-                        className="bg-background border-input"
-                        aria-label="Выберите пакет"
-                      >
+                      <SelectTrigger id="packageId">
                         <SelectValue placeholder="Выберите пакет" />
                       </SelectTrigger>
                       <SelectContent>
                         {packages.map((pkg) => (
-                          <SelectItem key={pkg.id} value={pkg.id}>
+                          <SelectItem key={pkg.id} value={pkg.id.toString()}>
                             <div className="flex items-center justify-between w-full">
                               <span>{pkg.name}</span>
-                              {pkg.isBestseller && (
+                              {pkg.is_best_seller && (
                                 <Badge variant="default" className="ml-2">BESTSELLER</Badge>
                               )}
                             </div>
@@ -222,6 +424,24 @@ export default function AddBookingPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {selectedPackage && (
+                    <div className="space-y-2">
+                      <Label htmlFor="numPeople">Количество человек</Label>
+                      <Input
+                        id="numPeople"
+                        name="numPeople"
+                        type="number"
+                        min={1}
+                        max={selectedPackage.max_people}
+                        value={formData.numPeople}
+                        onChange={(e) => handleChange('numPeople', e.target.value)}
+                        required
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Максимум: {selectedPackage.max_people} человек
+                      </p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -236,43 +456,36 @@ export default function AddBookingPage() {
               <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="date">Дата бронирования</Label>
+                    <Label htmlFor="bookingDate">Дата бронирования</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
-                          id="date"
+                          id="bookingDate"
                           variant="outline"
-                          className={`w-full justify-start text-left font-normal ${!formData.date && 'text-muted-foreground'}`}
-                          aria-label="Выберите дату"
+                          className={`w-full justify-start text-left font-normal ${!formData.bookingDate && 'text-muted-foreground'}`}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                          {formData.date ? format(formData.date, 'PPP') : 'Выберите дату'}
+                          {formData.bookingDate ? format(formData.bookingDate, 'PPP') : 'Выберите дату'}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0">
                         <Calendar
                           mode="single"
-                          selected={formData.date || undefined}
-                          onSelect={(date) => handleChange('date', date)}
+                          selected={formData.bookingDate || undefined}
+                          onSelect={(date) => handleChange('bookingDate', date)}
                           initialFocus
-                          aria-label="Календарь для выбора даты"
                         />
                       </PopoverContent>
                     </Popover>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="time">Время</Label>
+                    <Label htmlFor="startTime">Время начала</Label>
                     <Select 
-                      name="time"
-                      value={formData.time} 
-                      onValueChange={(value) => handleChange('time', value)}
+                      value={formData.startTime}
+                      onValueChange={(value) => handleChange('startTime', value)}
                       required
                     >
-                      <SelectTrigger 
-                        id="time"
-                        className="bg-background border-input"
-                        aria-label="Выберите время"
-                      >
+                      <SelectTrigger id="startTime">
                         <SelectValue placeholder="Выберите время" />
                       </SelectTrigger>
                       <SelectContent>
@@ -284,6 +497,15 @@ export default function AddBookingPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="endTime">Время окончания</Label>
+                    <Input
+                      id="endTime"
+                      name="endTime"
+                      value={formData.endTime}
+                      readOnly
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -292,7 +514,7 @@ export default function AddBookingPage() {
               <CardHeader className="bg-muted/30">
                 <CardTitle className="flex items-center">
                   <DoorOpen className="mr-2 h-5 w-5 text-primary" />
-                  Комната и оплата
+                  Комната и статусы
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6">
@@ -300,45 +522,67 @@ export default function AddBookingPage() {
                   <div className="space-y-2">
                     <Label htmlFor="roomId">Комната</Label>
                     <Select 
-                      name="roomId"
-                      value={formData.roomId} 
-                      onValueChange={(value) => handleChange('roomId', value)}
+                      value={formData.roomId?.toString() || ''}
+                      onValueChange={(value) => handleChange('roomId', parseInt(value))}
                       required
                     >
-                      <SelectTrigger 
-                        id="roomId"
-                        className="bg-background border-input"
-                        aria-label="Выберите комнату"
-                      >
+                      <SelectTrigger id="roomId">
                         <SelectValue placeholder="Выберите комнату" />
                       </SelectTrigger>
                       <SelectContent>
                         {rooms.map((room) => (
-                          <SelectItem key={room.id} value={room.id}>
-                            {room.name}
+                          <SelectItem key={room.id} value={room.id.toString()}>
+                            {room.name} (до {room.max_people} чел.)
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="paymentStatus">Статус оплаты</Label>
+                    <Label htmlFor="status">Статус бронирования</Label>
                     <RadioGroup 
-                      value={formData.paymentStatus} 
-                      onValueChange={(value) => handleChange('paymentStatus', value)}
+                      value={formData.status}
+                      onValueChange={(value: BookingStatus) => handleChange('status', value)}
                       className="flex flex-col space-y-1"
-                      required
                     >
-                      {paymentStatuses.map((status) => (
+                      {bookingStatusOptions.map((status) => (
                         <div key={status.id} className="flex items-center space-x-2 rounded-md border p-2 hover:bg-muted/50 cursor-pointer">
                           <RadioGroupItem value={status.id} id={`status-${status.id}`} />
                           <Label htmlFor={`status-${status.id}`} className="flex-grow cursor-pointer">
                             {status.name}
                           </Label>
-                          <Badge variant={status.color as any}>{status.name}</Badge>
+                          <Badge variant={status.color}>{status.name}</Badge>
                         </div>
                       ))}
                     </RadioGroup>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="paymentStatus">Статус оплаты</Label>
+                    <RadioGroup 
+                      value={formData.paymentStatus}
+                      onValueChange={(value: PaymentStatus) => handleChange('paymentStatus', value)}
+                      className="flex flex-col space-y-1"
+                    >
+                      {paymentStatusOptions.map((status) => (
+                        <div key={status.id} className="flex items-center space-x-2 rounded-md border p-2 hover:bg-muted/50 cursor-pointer">
+                          <RadioGroupItem value={status.id} id={`payment-${status.id}`} />
+                          <Label htmlFor={`payment-${status.id}`} className="flex-grow cursor-pointer">
+                            {status.name}
+                          </Label>
+                          <Badge variant={status.color}>{status.name}</Badge>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">Примечания</Label>
+                    <Input
+                      id="notes"
+                      name="notes"
+                      value={formData.notes}
+                      onChange={(e) => handleChange('notes', e.target.value)}
+                      placeholder="Дополнительная информация"
+                    />
                   </div>
                 </div>
               </CardContent>
@@ -363,30 +607,30 @@ export default function AddBookingPage() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h4 className="text-lg font-semibold text-primary">{selectedPackage.name}</h4>
-                    {selectedPackage.isBestseller && (
+                    {selectedPackage.is_best_seller && (
                       <Badge className="bg-primary">BESTSELLER</Badge>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground">{selectedPackage.title}</p>
+                  <p className="text-sm text-muted-foreground">{selectedPackage.description}</p>
                   
                   <div className="border-t pt-4">
-                    <h5 className="font-medium mb-2">Включено:</h5>
-                    <p className="text-sm text-foreground">{selectedPackage.items}</p>
-                  </div>
-                  
-                  <div className="border-t pt-4">
-                    <h5 className="font-medium mb-2">Инструменты:</h5>
-                    <p className="text-sm text-foreground">{selectedPackage.tools}</p>
+                    <h5 className="font-medium mb-2">Длительность:</h5>
+                    <p className="text-sm text-foreground">{selectedPackage.duration} минут</p>
                   </div>
                   
                   <div className="border-t pt-4">
                     <h5 className="font-medium mb-2">Вместимость:</h5>
-                    <p className="text-sm text-foreground">{selectedPackage.capacity}</p>
+                    <p className="text-sm text-foreground">До {selectedPackage.max_people} человек</p>
                   </div>
                   
                   <div className="border-t pt-4">
                     <h5 className="font-medium mb-2">Стоимость:</h5>
-                    <p className="text-xl font-bold text-primary">{selectedPackage.price}</p>
+                    <p className="text-xl font-bold text-primary">{selectedPackage.price} PLN</p>
+                  </div>
+                  
+                  <div className="border-t pt-4">
+                    <h5 className="font-medium mb-2">Задаток:</h5>
+                    <p className="text-lg text-foreground">{selectedPackage.deposit_amount} PLN</p>
                   </div>
                 </div>
               ) : (
@@ -418,25 +662,51 @@ export default function AddBookingPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Дата:</span>
-                    <span className="font-medium">{formData.date ? format(formData.date, 'dd.MM.yyyy') : '—'}</span>
+                    <span className="font-medium">{formData.bookingDate ? format(formData.bookingDate, 'dd.MM.yyyy') : '—'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Время:</span>
-                    <span className="font-medium">{formData.time || '—'}</span>
+                    <span className="font-medium">
+                      {formData.startTime || '—'} - {formData.endTime || '—'}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Комната:</span>
-                    <span className="font-medium">{formData.roomId ? rooms.find(r => r.id === formData.roomId)?.name : '—'}</span>
+                    <span className="font-medium">{selectedRoom?.name || '—'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Статус оплаты:</span>
+                    <span className="text-muted-foreground">Кол-во человек:</span>
+                    <span className="font-medium">{formData.numPeople}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Статус:</span>
                     <span className="font-medium">
-                      {formData.paymentStatus ? (
-                        <Badge variant={paymentStatuses.find(s => s.id === formData.paymentStatus)?.color as any}>
-                          {paymentStatuses.find(s => s.id === formData.paymentStatus)?.name}
-                        </Badge>
-                      ) : '—'}
+                      <Badge variant={
+                        bookingStatusOptions.find(s => s.id === formData.status)?.color || 'default'
+                      }>
+                        {bookingStatusOptions.find(s => s.id === formData.status)?.name}
+                      </Badge>
                     </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Оплата:</span>
+                    <span className="font-medium">
+                      <Badge variant={
+                        paymentStatusOptions.find(s => s.id === formData.paymentStatus)?.color || 'default'
+                      }>
+                        {paymentStatusOptions.find(s => s.id === formData.paymentStatus)?.name}
+                      </Badge>
+                    </span>
+                  </div>
+                  <div className="border-t pt-4">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Итого:</span>
+                      <span className="font-bold text-lg">{formData.totalPrice} PLN</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Оплачено:</span>
+                      <span className="font-medium">{formData.paidAmount} PLN</span>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -446,4 +716,4 @@ export default function AddBookingPage() {
       </div>
     </div>
   );
-} 
+}
