@@ -1,0 +1,18 @@
+services:
+  frontend:
+    build: .
+    container_name: smashandfun_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - smashandfun_network
+    env_file:
+      - .env  # Теперь используем .env из текущей директории
+
+networks:
+  smashandfun_network:
+    external: true

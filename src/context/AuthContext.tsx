@@ -69,31 +69,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Функция для входа
   const login = async (credentials: LoginCredentials): Promise<boolean> => {
     try {
-      // В реальном приложении здесь был бы запрос к API
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('http://localhost:89/api/token', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: JSON.stringify(credentials)
+        body: new URLSearchParams({
+          username: credentials.username,
+          password: credentials.password
+        }).toString()
       });
-      
+
       if (!response.ok) {
         return false;
       }
-      
-      const userData = await response.json();
-      
-      // Check if we got a valid user response (not an error)
-      if (userData && userData.id) {
-        // Устанавливаем cookie (в реальном приложении это был бы JWT токен)
-        document.cookie = `user=${userData.username}; path=/; max-age=86400`;
+
+      const tokenData = await response.json();
+
+      if (tokenData && tokenData.access_token) {
+        // Сохраняем токен и имя пользователя в куки
+        document.cookie = `access_token=${tokenData.access_token}; path=/; max-age=86400; Secure`;
+        document.cookie = `user=${credentials.username}; path=/; max-age=86400; Secure`;
+
         setIsAuthenticated(true);
-        setCurrentUser(userData);
-        setIsSuperAdmin(userData.username === 'admin');
+        setCurrentUser({
+          id: tokenData.user_id.toString(),
+          username: credentials.username,
+          role: credentials.username === 'admin' ? 'admin' : 'user',
+          name: credentials.username
+        });
+        setIsSuperAdmin(credentials.username === 'admin');
         return true;
       }
-      
+
       return false;
     } catch (error) {
       console.error('Login error:', error);
