@@ -21,13 +21,16 @@ import { FloatingImages } from '@/components/FloatingImages'
 import { ExtraItemsSection } from '@/components/ExtraItemsSection'
 import BookingModal from './booking/BookingModal'
 import { Package as BasePackage } from '@/types/booking'
+import Cookies from "universal-cookie"
+import useSWR from 'swr'
 
 // Types
 type Tool = 'ubranie' | 'kask' | 'rękawice'
 
 interface Package {
-  id?: string | number
+  id: number
   name: string
+  description: string
   items: string[]
   tools: Tool[]
   people: string
@@ -108,7 +111,6 @@ function PackageItems({ items, isBestseller }: { items: string[], isBestseller?:
   )
 }
 
-// Компонент для всплывающей подсказки
 function Tooltip({ content, children }: { content: string, children: React.ReactNode }) {
   const [isVisible, setIsVisible] = useState(false);
   
@@ -175,7 +177,6 @@ function PackageInfo({ people, duration }: { people: string, duration: string })
   )
 }
 
-// Компоненты с модальным окном бронирования
 interface PricingCardWithModalProps {
   pkg: Package;
   index: number;
@@ -187,7 +188,6 @@ function PricingCardWithModal({ pkg, index }: PricingCardWithModalProps) {
   const [isHovered, setIsHovered] = useState(false);
   const isBestseller = pkg.isBestseller;
 
-  // Преобразование данных пакета в формат для BookingModal
   const packageData: BasePackage = useMemo(() => {
     const getDuration = (durationStr: string): number => {
       const match = durationStr.match(/\d+/);
@@ -195,27 +195,25 @@ function PricingCardWithModal({ pkg, index }: PricingCardWithModalProps) {
     };
 
     const getMaxPeople = (peopleStr: string): number => {
-      // Если строка содержит диапазон (например, "1-6"), берем максимальное значение
       if (peopleStr.includes('-')) {
         const match = peopleStr.match(/(\d+)-(\d+)/);
         return match ? parseInt(match[2], 10) : 6;
-      } 
-      // Если это просто число
+      }
       const match = peopleStr.match(/\d+/);
       return match ? parseInt(match[0], 10) : 6;
     };
 
     return {
-      id: pkg.id || index + 1,
+      id: pkg.id,
       name: pkg.name,
-      description: '',
+      description: pkg.description,
       price: pkg.price,
-      depositAmount: 20, // Фиксированный депозит
+      depositAmount: 20,
       duration: getDuration(pkg.duration),
       maxPeople: getMaxPeople(pkg.people),
       isBestseller: pkg.isBestseller
     };
-  }, [pkg, index]);
+  }, [pkg]);
 
   return (
     <>
@@ -243,7 +241,6 @@ function PricingCardWithModal({ pkg, index }: PricingCardWithModalProps) {
               ? "border-white/30" 
               : "border-white/10 hover:border-white/20"
         )}>
-          {/* Header */}
           <div className="flex justify-between items-start">
             <div>
               <h3 className={cn(
@@ -267,14 +264,12 @@ function PricingCardWithModal({ pkg, index }: PricingCardWithModalProps) {
             )}
           </div>
 
-          {/* Content */}
           <div className="flex-1 pt-4 space-y-4">
             <PackageItems items={pkg.items} isBestseller={isBestseller} />
             <PackageTools tools={pkg.tools} isBestseller={isBestseller} />
             <PackageInfo people={pkg.people} duration={pkg.duration} />
           </div>
 
-          {/* Button */}
           <motion.button 
             onClick={() => setIsModalOpen(true)}
             className={cn(
@@ -308,71 +303,84 @@ function PricingCardWithModal({ pkg, index }: PricingCardWithModalProps) {
 
 export function PricingSection() {
   const { t } = useI18n()
+  const cookies = new Cookies();
+  const accessToken = cookies.get('access_token');
 
-  const packages: Package[] = [
-    {
-      id: 'extreme',
-      name: 'TRUDNY',
-      items: t('home.pricing.packages.extreme.items', { returnObjects: true }) as string[],
-      tools: ['ubranie', 'kask', 'rękawice'],
-      people: t('home.pricing.people.1-6'),
-      duration: t('home.pricing.duration.180'),
-      price: '999 PLN',
-      difficulty: t('home.pricing.packages.extreme.difficulty'),
-      bookingUrl: 'https://smashandfun.simplybook.it/v2/#book/service/5/count/1/',
-    },
-    {
-      id: 'hard',
-      name: 'ŚREDNI',
-      items: t('home.pricing.packages.hard.items', { returnObjects: true }) as string[],
-      tools: ['ubranie', 'kask', 'rękawice'],
-      people: t('home.pricing.people.1-4'),
-      duration: t('home.pricing.duration.120'),
-      price: '499 PLN',
-      difficulty: t('home.pricing.packages.hard.difficulty'),
-      bookingUrl: 'https://smashandfun.simplybook.it/v2/#book/service/4/count/1/',
-      isBestseller: true
-    },
-    {
-      id: 'medium',
-      name: 'ŁATWY',
-      items: t('home.pricing.packages.medium.items', { returnObjects: true }) as string[],
-      tools: ['ubranie', 'kask', 'rękawice'],
-      people: t('home.pricing.people.1-2'),
-      duration: t('home.pricing.duration.45'),
-      price: '299 PLN',
-      difficulty: t('home.pricing.packages.medium.difficulty'),
-      bookingUrl: 'https://smashandfun.simplybook.it/v2/#book/service/3/count/1/',
-    },
-    {
-      id: 'easy',
-      name: 'BUŁKA Z MASŁEM',
-      items: t('home.pricing.packages.easy.items', { returnObjects: true }) as string[],
-      tools: ['ubranie', 'kask', 'rękawice'],
-      people: t('home.pricing.people.1-2'),
-      duration: t('home.pricing.duration.30'),
-      price: '199 PLN',
-      difficulty: t('home.pricing.packages.easy.difficulty'),
-      bookingUrl: 'https://smashandfun.simplybook.it/v2/#book/service/2/count/1/',
-    },
-  ]
+  const fetcher = async (url: string) => {
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    })
+    if (!res.ok) {
+      throw new Error('Failed to fetch packages')
+    }
+    return res.json()
+  }
+
+  const { data: packages, error } = useSWR('http://localhost:89/api/packages', fetcher)
+
+  if (error) return <div>Failed to load packages</div>
+  if (!packages) return <div>Loading...</div>
+
+  const transformedPackages = packages.map((pkg: any) => {
+    let items: string[] = []
+    let tools: Tool[] = ['ubranie', 'kask', 'rękawice']
+    let people = ''
+    let duration = ''
+    let difficulty = ''
+
+    if (pkg.name.toLowerCase().includes('trudny')) {
+      items = t('home.pricing.packages.extreme.items', { returnObjects: true }) as string[]
+      people = t('home.pricing.people.1-6')
+      duration = t('home.pricing.duration.180')
+      difficulty = t('home.pricing.packages.extreme.difficulty')
+    } else if (pkg.name.toLowerCase().includes('średni')) {
+      items = t('home.pricing.packages.hard.items', { returnObjects: true }) as string[]
+      people = t('home.pricing.people.1-4')
+      duration = t('home.pricing.duration.120')
+      difficulty = t('home.pricing.packages.hard.difficulty')
+    } else if (pkg.name.toLowerCase().includes('łatwy')) {
+      items = t('home.pricing.packages.medium.items', { returnObjects: true }) as string[]
+      people = t('home.pricing.people.1-2')
+      duration = t('home.pricing.duration.45')
+      difficulty = t('home.pricing.packages.medium.difficulty')
+    } else {
+      items = t('home.pricing.packages.easy.items', { returnObjects: true }) as string[]
+      people = t('home.pricing.people.1-2')
+      duration = t('home.pricing.duration.30')
+      difficulty = t('home.pricing.packages.easy.difficulty')
+    }
+
+    return {
+      id: pkg.id,
+      name: pkg.name,
+      description: pkg.description,
+      items,
+      tools,
+      people,
+      duration,
+      price: `${pkg.price} PLN`,
+      difficulty,
+      bookingUrl: '',
+      isBestseller: pkg.is_best_seller
+    }
+  })
 
   return (
     <section id="booking" className="relative w-full bg-[#231f20] py-24 overflow-hidden">
-      {/* Background effects */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-transparent" />
       <div className="absolute -top-40 -right-40 w-[600px] h-[600px] bg-[#f36e21]/5 rounded-full blur-[150px]" />
       <div className="absolute -bottom-40 -left-40 w-[600px] h-[600px] bg-[#231f20]/90 rounded-full blur-[150px]" />
       
-      {/* Floating images */}
       <FloatingImages />
       
-      {/* Content */}
       <div className="relative z-10 max-w-7xl mx-auto px-4">
         <SectionTitle title={t('home.pricing.title')} />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {packages.map((pkg, index) => (
-            <PricingCardWithModal key={pkg.id || pkg.name} pkg={pkg} index={index} />
+          {transformedPackages.map((pkg: Package, index: number) => (
+            <PricingCardWithModal key={pkg.id} pkg={pkg} index={index} />
           ))}
         </div>
       </div>

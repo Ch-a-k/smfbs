@@ -14,7 +14,8 @@ import {
   DoorOpen,
   Settings,
   Users,
-  LayoutDashboardIcon
+  LayoutDashboardIcon,
+  PercentDiamond
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -79,6 +80,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       href: '/admin/users',
       segment: 'users',
       icon: <Users className="w-5 h-5" />
+    },
+    {
+      name: 'Промокоды',
+      href: '/admin/promocodes',
+      segment: 'promocodes',
+      icon: <PercentDiamond className="w-5 h-5" />
     }
   ], []);
 

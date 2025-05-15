@@ -48,7 +48,13 @@ export const en = {
       phonePlaceholder: 'Enter your phone number',
       numberOfPeople: 'Number of People',
       persons: 'persons',
-      promoCode: 'Promo Code (optional)',
+      promoCode: {
+        applied: "Promo code applied: {amount} PLN discount",
+        invalid: "Invalid promo code",
+        expired: "This promo code has expired",
+        enterCode: "Please enter promo code",
+        notFound: "Promo code not found"
+      },
       promoCodePlaceholder: 'Enter promo code if you have one',
       comment: 'Comments (optional)',
       commentPlaceholder: 'Any special requests or notes'

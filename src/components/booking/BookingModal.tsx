@@ -1,15 +1,3 @@
-/**
- * Модальное окно бронирования услуг
- * 
- * Компонент реализует полный цикл бронирования услуг, включая:
- * - Выбор даты и времени
- * - Заполнение контактной информации
- * - Выбор дополнительных услуг
- * - Оплату и завершение бронирования
- * 
- * Компонент поддерживает мультиязычность и различные типы пакетов услуг.
- */
-
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO, addMinutes } from 'date-fns';
@@ -18,115 +6,63 @@ import {
   X, ChevronLeft, ChevronRight, CreditCard, 
   Calendar, User, Check, ShoppingCart, 
   Clock, CreditCard as PaymentIcon, AlertCircle,
-  PackageIcon, PlusCircle, Sparkles, Gift, Users
+  Gift, Users, Loader2, Tag
 } from 'lucide-react';
 import { useI18n } from '@/i18n/I18nContext';
 import { Package as BasePackage, BookingFormData, PaymentStatus } from '@/types/booking';
 import BookingCalendar from './BookingCalendar';
 import TimeSelector from './TimeSelector';
 import CrossSellItems, { CrossSellItem } from './CrossSellItems';
-import { mockBookings, generateId, mockCrossSellItems } from '@/lib/frontend-mocks';
+import Cookies from "universal-cookie";
 
-/**
- * Типы шагов бронирования
- * - date: выбор даты
- * - time: выбор времени
- * - contact: заполнение контактной информации
- * - extras: выбор дополнительных услуг
- * - payment: оплата и завершение
- */
 type BookingStep = 'date' | 'time' | 'contact' | 'extras' | 'payment';
 
-/**
- * Интерфейс пропсов для компонента модального окна бронирования
- */
 interface BookingModalProps {
-  isOpen: boolean;               // Флаг для отображения/скрытия модального окна
-  onClose: () => void;           // Функция для закрытия модального окна
-  packageData: BasePackage;      // Данные о бронируемом пакете услуг
+  isOpen: boolean;
+  onClose: () => void;
+  packageData: BasePackage;
 }
 
-/**
- * Анимации для модального окна с использованием Framer Motion
- */
+interface Discount {
+  code: string;
+  fixed_amount: number;
+  valid_until: string;
+  is_active: boolean;
+}
+
+const cookies = new Cookies();
+const accessToken = cookies.get('access_token');
+
 const modalAnimation = {
   hidden: { opacity: 0, scale: 0.95 },
   visible: { 
     opacity: 1, 
     scale: 1,
-    transition: {
-      duration: 0.3,
-      ease: [0.16, 1, 0.3, 1]
-    }
+    transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] }
   },
   exit: { 
     opacity: 0, 
     scale: 0.95,
-    transition: {
-      duration: 0.2,
-      ease: [0.16, 1, 0.3, 1]
-    }
+    transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] }
   }
 };
 
-/**
- * Анимации для переходов между шагами бронирования
- */
-const stepAnimation = {
-  initial: { opacity: 0, x: 20 },
-  animate: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: -20 },
-  transition: { duration: 0.3 }
-};
-
-/**
- * Основной компонент модального окна бронирования
- * 
- * Управляет многоступенчатым процессом бронирования, включая все этапы от
- * выбора даты до оплаты. Поддерживает интернационализацию, валидацию форм,
- * и различные способы оплаты.
- * 
- * @param props Пропсы компонента
- * @returns React-компонент модального окна бронирования
- */
 export default function BookingModal({ isOpen, onClose, packageData }: BookingModalProps) {
   const { t, locale } = useI18n();
-  // Текущий шаг бронирования
   const [currentStep, setCurrentStep] = useState<BookingStep>('date');
-  // Состояния загрузки и отправки формы
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Сообщение об ошибке
   const [errorMessage, setErrorMessage] = useState('');
+  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
+  const [discount, setDiscount] = useState<Discount | null>(null);
+  const [isCheckingDiscount, setIsCheckingDiscount] = useState(false);
+  const [discountMessage, setDiscountMessage] = useState('');
   
-  // Состояние для выбора даты и времени
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  
-  // Состояние для управления дополнительными услугами
   const [selectedCrossSellItems, setSelectedCrossSellItems] = useState<string[]>([]);
   const [totalAdditionalPrice, setTotalAdditionalPrice] = useState(0);
   
-  /**
-   * Получает цену из данных пакета с учетом возможных типов данных
-   * Обрабатывает случаи, когда цена представлена строкой или числом
-   * 
-   * @returns Числовое значение цены пакета
-   */
-  const getPackagePrice = (): number => {
-    if (typeof packageData.price === 'number') {
-      return packageData.price;
-    } else if (typeof packageData.price === 'string') {
-      // Явное приведение типа к string для избежания ошибки TypeScript
-      const priceString = packageData.price as string;
-      // Извлекаем числовое значение из строки, удаляя все нечисловые символы
-      const numericValue = priceString.replace(/[^\d]/g, '');
-      return numericValue ? parseInt(numericValue, 10) : 0;
-    }
-    return 0; // Если цена не указана или имеет неподдерживаемый тип
-  };
-  
-  // Данные формы бронирования
   const [formData, setFormData] = useState<BookingFormData>({
     packageId: packageData.id,
     packageName: packageData.name,
@@ -142,33 +78,352 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     comment: '',
     crossSellItems: [],
     totalAmount: getPackagePrice(),
-    depositAmount: 20, // 20 PLN for all packages
+    depositAmount: packageData.depositAmount || 20,
   });
   
-  // Метод оплаты
   const [paymentMethod, setPaymentMethod] = useState<PaymentStatus>('FULLY_PAID');
-  
-  /**
-   * Блокирует прокрутку основной страницы при открытии модального окна
-   * и восстанавливает при закрытии
-   */
+
+  function getPackagePrice(): number {
+    if (typeof packageData.price === 'number') return packageData.price;
+    if (typeof packageData.price === 'string') {
+      const numericValue = packageData.price.replace(/[^\d]/g, '');
+      return numericValue ? parseInt(numericValue, 10) : 0;
+    }
+    return 0;
+  }
+
+  const calculateTotalAmount = (): number => {
+    const basePrice = getPackagePrice();
+    const total = basePrice + totalAdditionalPrice;
+    if (discount) {
+      return Math.max(0, total - discount.fixed_amount);
+    }
+    return total;
+  };
+
+  const checkDiscountCode = async () => {
+    if (!formData.promoCode) {
+      setDiscountMessage(t('booking.promoCode.enterCode'));
+      return;
+    }
+
+    setIsCheckingDiscount(true);
+    setDiscountMessage('');
+
+    try {
+      const response = await fetch(
+        `http://localhost:89/api/discounts/check`,
+        {
+          method: 'POST', // Используем POST вместо GET
+          credentials: 'include',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            discount_code: formData.promoCode // Передаем промокод в теле запроса
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.detail?.includes('expired')
+            ? t('booking.promoCode.expired')
+            : errorData.detail?.includes('not found')
+              ? t('booking.promoCode.notFound')
+              : t('booking.promoCode.invalid')
+        );
+      }
+
+      const discountData = await response.json();
+      setDiscount(discountData);
+      
+      // Now this will work with proper typing
+      setDiscountMessage(
+        `${t('booking.promoCode.applied')} ${discountData.fixed_amount} PLN`
+      );
+      
+      setFormData(prev => ({
+        ...prev,
+        totalAmount: calculateTotalAmount()
+      }));
+    } catch (error: any) {
+      setDiscount(null);
+      setDiscountMessage(error.message);
+      setFormData(prev => ({
+        ...prev,
+        totalAmount: calculateTotalAmount()
+      }));
+    } finally {
+      setIsCheckingDiscount(false);
+    }
+  };
+
+  const removeDiscount = () => {
+    setDiscount(null);
+    setDiscountMessage('');
+    setFormData(prev => ({
+      ...prev,
+      totalAmount: calculateTotalAmount()
+    }));
+  };
+
+  const fetchAvailableTimes = async (date: Date) => {
+    try {
+      setIsLoading(true);
+      const formattedDate = format(date, 'yyyy-MM-dd');
+      
+      const response = await fetch(
+        `http://localhost:89/api/bookings/available-times?package_id=${packageData.id}&date=${formattedDate}`,
+        {
+          credentials: 'include',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) throw new Error(t('booking.error.fetchTimes'));
+      
+      const data = await response.json();
+      setAvailableTimes(data);
+    } catch (error) {
+      console.error('Error fetching available times:', error);
+      setErrorMessage(t('booking.error.fetchTimes'));
+      setAvailableTimes([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const createCustomer = async () => {
+    try {
+      const response = await fetch('http://localhost:89/api/customers', {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          phone: formData.phone,
+          name: formData.name,
+          password: generateTempPassword(),
+          is_vip: false
+        }),
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || t('booking.error.customerCreate'));
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error creating customer:', error);
+      throw error;
+    }
+  };
+
+  const generateTempPassword = () => {
+    return Math.random().toString(36).slice(-8);
+  };
+
+  const submitBooking = async () => {
+    try {
+      const response = await fetch('http://localhost:89/api/bookings/user', {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify({
+          package_id: formData.packageId,
+          customer_name: formData.name,
+          customer_email: formData.email,
+          customer_phone: formData.phone,
+          booking_date: formData.date,
+          start_time: formData.startTime,
+          end_time: formData.endTime,
+          num_people: formData.numberOfPeople,
+          total_price: formData.totalAmount,
+          payment_status: paymentMethod,
+          paid_amount: paymentMethod === 'FULLY_PAID' 
+            ? formData.totalAmount 
+            : formData.depositAmount,
+          additional_items: selectedCrossSellItems,
+          notes: formData.comment,
+          promo_code: formData.promoCode
+        }),
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || t('booking.error.submit'));
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error submitting booking:', error);
+      throw error;
+    }
+  };
+
+  const handleDateSelect = async (date: Date) => {
+    setSelectedDate(date);
+    setSelectedTime(null);
+    await fetchAvailableTimes(date);
+  };
+
+  const handleSubmit = async () => {
+    setErrorMessage('');
+    setIsSubmitting(true);
+    
+    try {
+      await createCustomer();
+      await submitBooking();
+      
+      alert(t('booking.success.message'));
+      onClose();
+    } catch (error: any) {
+      console.error('Booking error:', error);
+      setErrorMessage(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errorMessage) setErrorMessage('');
+  };
+
+  const handleTimeSelect = (time: string) => {
+    setSelectedTime(time);
+  };
+
+  const handlePaymentMethodSelect = (method: PaymentStatus) => {
+    setPaymentMethod(method);
+  };
+
+  const handleCrossSellItemToggle = (item: CrossSellItem) => {
+    setSelectedCrossSellItems(prev => {
+      const isSelected = prev.includes(item.id);
+      const priceChange = isSelected ? -getItemPrice(item.id) : getItemPrice(item.id);
+      
+      setTotalAdditionalPrice(prev => prev + priceChange);
+      
+      const newTotalAmount = calculateTotalAmount();
+      setFormData(current => ({
+        ...current,
+        totalAmount: newTotalAmount
+      }));
+      
+      return isSelected ? prev.filter(id => id !== item.id) : [...prev, item.id];
+    });
+  };
+
+  const validateDateStep = () => {
+    if (!selectedDate) {
+      setErrorMessage(t('booking.validation.dateRequired'));
+      return false;
+    }
+    return true;
+  };
+
+  const validateTimeStep = () => {
+    if (!selectedTime) {
+      setErrorMessage(t('booking.validation.timeRequired'));
+      return false;
+    }
+    return true;
+  };
+
+  const validateContactStep = () => {
+    if (!formData.name.trim()) {
+      setErrorMessage(t('booking.validation.nameRequired'));
+      return false;
+    }
+    if (!formData.email.trim()) {
+      setErrorMessage(t('booking.validation.emailRequired'));
+      return false;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      setErrorMessage(t('booking.validation.emailInvalid'));
+      return false;
+    }
+    if (!formData.phone.trim()) {
+      setErrorMessage(t('booking.validation.phoneRequired'));
+      return false;
+    }
+    if (formData.phone.replace(/\D/g, '').length < 9) {
+      setErrorMessage(t('booking.validation.phoneInvalid'));
+      return false;
+    }
+    return true;
+  };
+
+  const handleNextStep = () => {
+    setErrorMessage('');
+    
+    if (currentStep === 'date' && !validateDateStep()) return;
+    if (currentStep === 'time' && !validateTimeStep()) return;
+    if (currentStep === 'contact' && !validateContactStep()) return;
+    
+    const nextSteps: Record<BookingStep, BookingStep> = {
+      date: 'time',
+      time: 'contact',
+      contact: 'extras',
+      extras: 'payment',
+      payment: 'payment'
+    };
+    setCurrentStep(nextSteps[currentStep]);
+  };
+
+  const handlePrevStep = () => {
+    setErrorMessage('');
+    const prevSteps: Record<BookingStep, BookingStep | null> = {
+      date: null,
+      time: 'date',
+      contact: 'time',
+      extras: 'contact',
+      payment: 'extras'
+    };
+    if (prevSteps[currentStep]) {
+      setCurrentStep(prevSteps[currentStep]!);
+    }
+  };
+
+  const formatDate = (date: Date) => {
+    return format(date, 'EEEE, d MMMM yyyy', { locale: locale === 'pl' ? pl : enUS });
+  };
+
+  const getItemPrice = (itemId: string): number => {
+    const prices: Record<string, number> = {
+      'glass': 50, 'keyboard': 20, 'tvMonitor': 100,
+      'furniture': 120, 'printer': 50, 'mouse': 10,
+      'phone': 30, 'goProRecording': 50
+    };
+    return prices[itemId] || 0;
+  };
+
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
-    
-    // Очистка при размонтировании
     return () => {
       document.body.style.overflow = '';
     };
   }, [isOpen]);
-  
-  /**
-   * Сбрасывает форму при открытии модального окна
-   * Инициализирует начальные значения для всех полей
-   */
+
   useEffect(() => {
     if (isOpen) {
       setCurrentStep('date');
@@ -176,22 +431,29 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
       setSelectedTime(null);
       setSelectedCrossSellItems([]);
       setTotalAdditionalPrice(0);
+      setDiscount(null);
+      setDiscountMessage('');
       setFormData({
-        ...formData,
         packageId: packageData.id,
         packageName: packageData.name,
         date: '',
         startTime: '',
         endTime: '',
+        roomId: 0,
+        name: '',
+        email: '',
+        phone: '',
+        numberOfPeople: 1,
+        promoCode: '',
+        comment: '',
         crossSellItems: [],
         totalAmount: getPackagePrice(),
+        depositAmount: packageData.depositAmount || 20,
       });
+      setPaymentMethod('FULLY_PAID');
     }
   }, [isOpen, packageData]);
-  
-  /**
-   * Обновляет поле даты в форме при выборе даты
-   */
+
   useEffect(() => {
     if (selectedDate) {
       setFormData(prev => ({
@@ -200,352 +462,42 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
       }));
     }
   }, [selectedDate]);
-  
-  /**
-   * Обновляет поля времени начала и окончания при выборе времени
-   * Автоматически вычисляет время окончания на основе длительности пакета
-   */
+
   useEffect(() => {
-    if (selectedTime) {
-      // Вычисляем время окончания, добавляя длительность пакета к времени начала
-      const startDate = selectedDate && selectedTime 
-        ? new Date(
-            selectedDate.getFullYear(),
-            selectedDate.getMonth(),
-            selectedDate.getDate(),
-            parseInt(selectedTime.split(':')[0]),
-            parseInt(selectedTime.split(':')[1])
-          )
-        : null;
+    if (selectedTime && selectedDate) {
+      const startDate = new Date(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+        selectedDate.getDate(),
+        parseInt(selectedTime.split(':')[0]),
+        parseInt(selectedTime.split(':')[1])
+      );
       
-      if (startDate) {
-        const endDate = addMinutes(startDate, packageData.duration);
-        const endTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
-        
-        setFormData(prev => ({
-          ...prev,
-          startTime: selectedTime,
-          endTime: endTime
-        }));
-      }
+      const endDate = addMinutes(startDate, packageData.duration);
+      const endTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
+      
+      setFormData(prev => ({
+        ...prev,
+        startTime: selectedTime,
+        endTime: endTime
+      }));
     }
   }, [selectedTime, selectedDate, packageData.duration]);
-  
-  /**
-   * Обновляет список выбранных дополнительных товаров в форме
-   * Этот useEffect больше не обновляет totalAmount, так как это
-   * делается напрямую в handleCrossSellItemToggle
-   */
+
   useEffect(() => {
-    // Обновляем только список выбранных товаров в форме
     setFormData(prev => ({
       ...prev,
-      crossSellItems: selectedCrossSellItems
+      crossSellItems: selectedCrossSellItems,
+      totalAmount: calculateTotalAmount()
     }));
-  }, [selectedCrossSellItems]);
-  
-  /**
-   * Обработчик изменений полей формы
-   */
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    
-    // Очищаем сообщение об ошибке при вводе пользователем
-    if (errorMessage) setErrorMessage('');
-  };
-  
-  /**
-   * Обработчик выбора даты
-   */
-  const handleDateSelect = (date: Date) => {
-    setSelectedDate(date);
-    setSelectedTime(null); // Сбрасываем выбранное время при изменении даты
-  };
-  
-  /**
-   * Обработчик выбора времени
-   */
-  const handleTimeSelect = (time: string) => {
-    setSelectedTime(time);
-  };
-  
-  /**
-   * Обработчик выбора метода оплаты
-   */
-  const handlePaymentMethodSelect = (method: PaymentStatus) => {
-    setPaymentMethod(method);
-  };
-  
-  /**
-   * Обработчик выбора/отмены дополнительного товара
-   * Обновляет список выбранных товаров и пересчитывает общую стоимость
-   * заказа сразу после выбора или отмены товара
-   * 
-   * @param item Выбранный или отмененный товар
-   */
-  const handleCrossSellItemToggle = (item: CrossSellItem) => {
-    setSelectedCrossSellItems(prev => {
-      const isSelected = prev.includes(item.id);
-      
-      // Если товар уже выбран, удаляем его
-      if (isSelected) {
-        // Уменьшаем общую стоимость
-        const newTotalAdditionalPrice = totalAdditionalPrice - getItemPrice(item.id);
-        setTotalAdditionalPrice(newTotalAdditionalPrice);
-        
-        // Обновляем общую сумму заказа сразу
-        const newTotalAmount = getPackagePrice() + newTotalAdditionalPrice;
-        setFormData(current => ({
-          ...current,
-          totalAmount: newTotalAmount
-        }));
-        
-        // Возвращаем новый массив без этого товара
-        return prev.filter(id => id !== item.id);
-      } else {
-        // Если товар не выбран, добавляем его
-        // Увеличиваем общую стоимость
-        const newTotalAdditionalPrice = totalAdditionalPrice + getItemPrice(item.id);
-        setTotalAdditionalPrice(newTotalAdditionalPrice);
-        
-        // Обновляем общую сумму заказа сразу
-        const newTotalAmount = getPackagePrice() + newTotalAdditionalPrice;
-        setFormData(current => ({
-          ...current,
-          totalAmount: newTotalAmount
-        }));
-        
-        // Возвращаем новый массив с этим товаром
-        return [...prev, item.id];
-      }
-    });
-  };
-  
-  /**
-   * Валидация шага выбора даты
-   * Проверяет, выбрана ли дата
-   * 
-   * @returns true если данные валидны, false в противном случае
-   */
-  const validateDateStep = (): boolean => {
-    if (!selectedDate) {
-      setErrorMessage(t('booking.validation.dateRequired'));
-      return false;
-    }
-    
-    return true;
-  };
-  
-  /**
-   * Валидация шага выбора времени
-   * Проверяет, выбрано ли время
-   * 
-   * @returns true если данные валидны, false в противном случае
-   */
-  const validateTimeStep = (): boolean => {
-    if (!selectedTime) {
-      setErrorMessage(t('booking.validation.timeRequired'));
-      return false;
-    }
-    
-    return true;
-  };
-  
-  /**
-   * Валидация шага заполнения контактной информации
-   * Проверяет обязательные поля и формат email и телефона
-   * 
-   * @returns true если данные валидны, false в противном случае
-   */
-  const validateContactStep = (): boolean => {
-    if (!formData.name) {
-      setErrorMessage(t('booking.validation.nameRequired'));
-      return false;
-    }
-    
-    if (!formData.email) {
-      setErrorMessage(t('booking.validation.emailRequired'));
-      return false;
-    }
-    
-    // Простая валидация email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      setErrorMessage(t('booking.validation.emailInvalid'));
-      return false;
-    }
-    
-    if (!formData.phone) {
-      setErrorMessage(t('booking.validation.phoneRequired'));
-      return false;
-    }
-    
-    // Простая валидация телефона (не менее 9 цифр)
-    const phoneDigits = formData.phone.replace(/\D/g, '');
-    if (phoneDigits.length < 9) {
-      setErrorMessage(t('booking.validation.phoneInvalid'));
-      return false;
-    }
-    
-    return true;
-  };
-  
-  /**
-   * Обработчик кнопки перехода к следующему шагу
-   * Выполняет валидацию текущего шага и переходит к следующему при успешной валидации
-   */
-  const handleNextStep = () => {
-    setErrorMessage('');
-    
-    if (currentStep === 'date') {
-      if (validateDateStep()) {
-        setCurrentStep('time');
-      }
-    } else if (currentStep === 'time') {
-      if (validateTimeStep()) {
-        setCurrentStep('contact');
-      }
-    } else if (currentStep === 'contact') {
-      if (validateContactStep()) {
-        setCurrentStep('extras');
-      }
-    } else if (currentStep === 'extras') {
-      setCurrentStep('payment');
-    }
-  };
-  
-  /**
-   * Обработчик кнопки возврата к предыдущему шагу
-   */
-  const handlePrevStep = () => {
-    setErrorMessage('');
-    
-    if (currentStep === 'time') {
-      setCurrentStep('date');
-    } else if (currentStep === 'contact') {
-      setCurrentStep('time');
-    } else if (currentStep === 'extras') {
-      setCurrentStep('contact');
-    } else if (currentStep === 'payment') {
-      setCurrentStep('extras');
-    }
-  };
-  
-  /**
-   * Обработчик отправки формы бронирования
-   * Выполняет имитацию API-запроса для создания бронирования
-   * и обработку результатов
-   */
-  const handleSubmit = async () => {
-    setErrorMessage('');
-    setIsSubmitting(true);
-    
-    try {
-      // Имитация API-запроса с задержкой
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Определение суммы оплаты в зависимости от выбранного метода
-      const finalPaymentAmount = paymentMethod === 'FULLY_PAID' 
-        ? formData.totalAmount 
-        : formData.depositAmount;
-      
-      // Подготовка данных бронирования для отправки
-      const bookingData = {
-        ...formData,
-        paymentMethod,
-        paymentAmount: finalPaymentAmount,
-        status: 'PENDING',
-      };
-      
-      // Добавляем новое бронирование в моковые данные
-      const newBooking = {
-        id: mockBookings.length + 1,
-        packageId: typeof bookingData.packageId === 'string' ? parseInt(bookingData.packageId) : bookingData.packageId,
-        packageName: bookingData.packageName || '',
-        roomId: bookingData.roomId,
-        roomName: 'Автоматически назначенный зал',
-        customerName: bookingData.name,
-        customerEmail: bookingData.email,
-        customerPhone: bookingData.phone,
-        date: bookingData.date,
-        startTime: bookingData.startTime,
-        endTime: bookingData.endTime,
-        numPeople: bookingData.numberOfPeople,
-        notes: bookingData.comment || '',
-        comment: bookingData.comment || '',
-        promoCode: bookingData.promoCode || '',
-        totalPrice: bookingData.totalAmount || 0,
-        totalAmount: bookingData.totalAmount || 0,
-        paymentStatus: paymentMethod,
-        paidAmount: finalPaymentAmount || 0,
-        depositAmount: bookingData.depositAmount || 0,
-        status: 'PENDING',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        name: bookingData.name,
-        email: bookingData.email,
-        phone: bookingData.phone,
-        numberOfPeople: bookingData.numberOfPeople
-      };
-      
-      // Добавляем в массив бронирований
-      mockBookings.push(newBooking);
-      
-      console.log('Booking submitted:', bookingData);
-      console.log('New booking added to mock data:', newBooking);
-      
-      // Показываем сообщение об успехе и закрываем модальное окно
-      alert(t('booking.success.message'));
-      onClose();
-      
-    } catch (error) {
-      console.error('Error submitting booking:', error);
-      setErrorMessage(t('booking.error.message'));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-  
-  /**
-   * Форматирует дату для отображения с учетом локализации
-   * 
-   * @param date Дата для форматирования
-   * @returns Отформатированная строка даты
-   */
-  const formatDate = (date: Date) => {
-    return format(date, 'EEEE, d MMMM yyyy', { locale: locale === 'pl' ? pl : enUS });
-  };
-  
-  /**
-   * Возвращает цену товара по его идентификатору
-   * 
-   * @param itemId Идентификатор товара
-   * @returns Цена товара
-   */
-  const getItemPrice = (itemId: string): number => {
-    const itemPrices: Record<string, number> = {
-      'glass': 50,        // 10 стеклянных предметов - 50 PLN
-      'keyboard': 20,     // Клавиатура - 20 PLN
-      'tvMonitor': 100,   // ТВ/монитор - 100 PLN
-      'furniture': 120,   // Мебель - 120 PLN
-      'printer': 50,      // Принтер - 50 PLN
-      'mouse': 10,        // Компьютерная мышь - 10 PLN
-      'phone': 30,        // Телефон - 30 PLN
-      'goProRecording': 50 // GoPro запись - 50 PLN
-    };
-    
-    return itemPrices[itemId] || 0;
-  };
-  
-  // Если модальное окно закрыто, ничего не рендерим
+  }, [selectedCrossSellItems, discount]);
+
   if (!isOpen) return null;
-  
+
   return (
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4 sm:p-6 md:p-8">
-          {/* Backdrop with blur */}
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -555,7 +507,6 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
             onClick={onClose}
           />
           
-          {/* Modal container */}
           <motion.div
             className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-gradient-to-b from-[#2c2527] to-[#231f20] rounded-2xl overflow-hidden shadow-xl border border-white/10 z-10"
             variants={modalAnimation}
@@ -563,12 +514,9 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
             animate="visible"
             exit="exit"
           >
-            {/* Header */}
             <div className="px-5 py-4 flex justify-between items-center shrink-0 border-b border-white/10 bg-black/30">
               <div>
-                <h2 className="font-bold text-lg text-white">
-                  {t('booking.title')}
-                </h2>
+                <h2 className="font-bold text-lg text-white">{t('booking.title')}</h2>
                 <p className="text-sm text-[#f36e21]">{packageData.name}</p>
               </div>
               
@@ -581,10 +529,8 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
               </button>
             </div>
             
-            {/* Steps progress */}
             <div className="px-5 py-4 bg-black/20">
               <div className="relative flex justify-between">
-                {/* Progress bar */}
                 <div className="absolute top-[15px] left-[30px] right-[30px] h-[2px] bg-white/10">
                   <div 
                     className="h-full bg-[#f36e21] transition-all duration-300"
@@ -597,79 +543,35 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                   />
                 </div>
                 
-                {/* Step 1: Date */}
-                <div className="flex flex-col items-center z-10">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
-                    currentStep === 'date' ? 'bg-[#f36e21] text-white' : 
-                    (currentStep === 'time' || currentStep === 'contact' || currentStep === 'extras' || currentStep === 'payment') ? 'bg-green-500 text-white' : 
-                    'bg-black/60 text-white'
-                  }`}>
-                    {(currentStep === 'time' || currentStep === 'contact' || currentStep === 'extras' || currentStep === 'payment') 
-                      ? <Check className="w-4 h-4" /> 
-                      : <Calendar className="w-4 h-4" />
-                    }
+                {['date', 'time', 'contact', 'extras', 'payment'].map((step, index) => (
+                  <div key={step} className="flex flex-col items-center z-10">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
+                      currentStep === step 
+                        ? 'bg-[#f36e21] text-white' 
+                        : index < ['date', 'time', 'contact', 'extras', 'payment'].indexOf(currentStep) 
+                          ? 'bg-green-500 text-white' 
+                          : 'bg-black/60 text-white'
+                    }`}>
+                      {index < ['date', 'time', 'contact', 'extras', 'payment'].indexOf(currentStep) ? (
+                        <Check className="w-4 h-4" />
+                      ) : (
+                        {
+                          date: <Calendar className="w-4 h-4" />,
+                          time: <Clock className="w-4 h-4" />,
+                          contact: <User className="w-4 h-4" />,
+                          extras: <Gift className="w-4 h-4" />,
+                          payment: <PaymentIcon className="w-4 h-4" />
+                        }[step]
+                      )}
+                    </div>
+                    <span className="text-xs mt-2 text-gray-300">
+                      {t(`booking.steps.${step}`)}
+                    </span>
                   </div>
-                  <span className="text-xs mt-2 text-gray-300">{t('booking.steps.date')}</span>
-                </div>
-                
-                {/* Step 2: Time */}
-                <div className="flex flex-col items-center z-10">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
-                    currentStep === 'time' ? 'bg-[#f36e21] text-white' : 
-                    (currentStep === 'contact' || currentStep === 'extras' || currentStep === 'payment') ? 'bg-green-500 text-white' : 
-                    'bg-black/60 text-white'
-                  }`}>
-                    {(currentStep === 'contact' || currentStep === 'extras' || currentStep === 'payment') 
-                      ? <Check className="w-4 h-4" /> 
-                      : <Clock className="w-4 h-4" />
-                    }
-                  </div>
-                  <span className="text-xs mt-2 text-gray-300">{t('booking.steps.time')}</span>
-                </div>
-                
-                {/* Step 3: Contact */}
-                <div className="flex flex-col items-center z-10">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
-                    currentStep === 'contact' ? 'bg-[#f36e21] text-white' : 
-                    (currentStep === 'extras' || currentStep === 'payment') ? 'bg-green-500 text-white' : 
-                    'bg-black/60 text-white'
-                  }`}>
-                    {(currentStep === 'extras' || currentStep === 'payment') 
-                      ? <Check className="w-4 h-4" /> 
-                      : <User className="w-4 h-4" />
-                    }
-                  </div>
-                  <span className="text-xs mt-2 text-gray-300">{t('booking.steps.contact')}</span>
-                </div>
-                
-                {/* Step 4: Extras */}
-                <div className="flex flex-col items-center z-10">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
-                    currentStep === 'extras' ? 'bg-[#f36e21] text-white' : 
-                    currentStep === 'payment' ? 'bg-green-500 text-white' : 
-                    'bg-black/60 text-white'
-                  }`}>
-                    {currentStep === 'payment' 
-                      ? <Check className="w-4 h-4" /> 
-                      : <Gift className="w-4 h-4" />
-                    }
-                  </div>
-                  <span className="text-xs mt-2 text-gray-300">{t('booking.steps.extras')}</span>
-                </div>
-                
-                {/* Step 5: Payment */}
-                <div className="flex flex-col items-center z-10">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
-                    currentStep === 'payment' ? 'bg-[#f36e21] text-white' : 'bg-black/60 text-white'
-                  }`}>
-                    <PaymentIcon className="w-4 h-4" />
-                  </div>
-                  <span className="text-xs mt-2 text-gray-300">{t('booking.steps.payment')}</span>
-                </div>
+                ))}
               </div>
             </div>
             
-            {/* Error message */}
             {errorMessage && (
               <div className="mx-5 mt-4 p-3 bg-red-900/40 text-red-200 border border-red-500/50 rounded-lg text-sm flex items-start">
                 <AlertCircle className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
@@ -677,10 +579,8 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
               </div>
             )}
             
-            {/* Form content - scrollable area */}
             <div className="p-5 overflow-y-auto flex-grow">
               <AnimatePresence mode="wait">
-                {/* Step 1: Date selection */}
                 {currentStep === 'date' && (
                   <motion.div
                     key="date-step"
@@ -700,7 +600,6 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                     </div>
                     
                     <div className="space-y-5">
-                      {/* Календарь для выбора даты */}
                       <div className="bg-black/20 border border-white/10 rounded-xl overflow-hidden">
                         <BookingCalendar
                           selectedDate={selectedDate}
@@ -708,7 +607,6 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                         />
                       </div>
                       
-                      {/* Информация о выбранной дате */}
                       {selectedDate && (
                         <div className="bg-[#f36e21]/10 border border-[#f36e21]/30 rounded-xl p-4">
                           <div className="flex items-start">
@@ -728,7 +626,6 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                   </motion.div>
                 )}
                 
-                {/* Step 2: Time selection */}
                 {currentStep === 'time' && (
                   <motion.div
                     key="time-step"
@@ -748,7 +645,6 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                     </div>
                     
                     <div className="space-y-5">
-                      {/* Информация о выбранной дате */}
                       <div className="bg-black/20 border border-white/10 rounded-xl p-4">
                         <div className="flex items-start">
                           <Calendar className="w-5 h-5 text-white/70 mr-3 mt-0.5" />
@@ -757,23 +653,25 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                               {t('booking.date.selected')}
                             </div>
                             <div className="text-white text-sm font-medium mt-0.5">
-                              {formatDate(selectedDate!)}
+                              {selectedDate && formatDate(selectedDate)}
                             </div>
                           </div>
                         </div>
                       </div>
                       
-                      {/* Выбор времени */}
                       <div className="bg-black/20 border border-white/10 rounded-xl p-4">
-                        <TimeSelector
-                          selectedTime={selectedTime}
-                          onChange={handleTimeSelect}
-                          date={selectedDate!}
-                          durationMinutes={packageData.duration}
-                        />
+                        {selectedDate && (
+                          <TimeSelector
+                            selectedTime={selectedTime}
+                            onChange={handleTimeSelect}
+                            availableTimes={availableTimes}
+                            isLoading={isLoading}
+                            date={selectedDate}
+                            durationMinutes={packageData.duration}
+                          />
+                        )}
                       </div>
                       
-                      {/* Отображение выбранного времени */}
                       {selectedTime && (
                         <div className="bg-[#f36e21]/10 border border-[#f36e21]/30 rounded-xl p-4">
                           <div className="flex items-start">
@@ -796,7 +694,6 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                   </motion.div>
                 )}
                 
-                {/* Step 3: Contact information */}
                 {currentStep === 'contact' && (
                   <motion.div
                     key="contact-step"
@@ -815,7 +712,6 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                       </p>
                     </div>
                     
-                    {/* Выбранная дата и время (информационно) */}
                     <div className="bg-black/20 border border-white/10 rounded-xl p-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-start">
@@ -825,7 +721,7 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                               {t('booking.date.selected')}
                             </div>
                             <div className="text-white text-sm font-medium mt-0.5">
-                              {formatDate(selectedDate!)}
+                              {selectedDate && formatDate(selectedDate)}
                             </div>
                           </div>
                         </div>
@@ -844,7 +740,6 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                     </div>
                     
                     <div className="space-y-4 bg-black/20 border border-white/10 rounded-xl p-4">
-                      {/* Personal information */}
                       <div className="grid grid-cols-1 gap-4">
                         <div>
                           <label htmlFor="name" className="block text-gray-300 text-sm mb-1.5">
@@ -910,19 +805,45 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                             />
                           </div>
                           
-                          <div>
+                          <div className="relative">
                             <label htmlFor="promoCode" className="block text-gray-300 text-sm mb-1.5">
                               {t('booking.contact.promoCode')}
                             </label>
-                            <input
-                              type="text"
-                              id="promoCode"
-                              name="promoCode"
-                              value={formData.promoCode}
-                              onChange={handleInputChange}
-                              className="w-full bg-black/40 text-white border border-white/20 rounded-lg p-2.5 text-sm focus:outline-none focus:border-[#f36e21] focus:ring-1 focus:ring-[#f36e21]/50 transition-colors"
-                              placeholder={t('booking.contact.promoCodePlaceholder')}
-                            />
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                id="promoCode"
+                                name="promoCode"
+                                value={formData.promoCode}
+                                onChange={handleInputChange}
+                                className="w-full bg-black/40 text-white border border-white/20 rounded-lg p-2.5 text-sm focus:outline-none focus:border-[#f36e21] focus:ring-1 focus:ring-[#f36e21]/50 transition-colors"
+                                placeholder={t('booking.contact.promoCodePlaceholder')}
+                              />
+                              <button
+                                onClick={discount ? removeDiscount : checkDiscountCode}
+                                disabled={isCheckingDiscount || !formData.promoCode}
+                                className={`px-3 rounded-lg flex items-center justify-center ${
+                                  discount 
+                                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                    : 'bg-[#f36e21]/20 text-[#f36e21] border border-[#f36e21]/30'
+                                } ${isCheckingDiscount ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              >
+                                {isCheckingDiscount ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : discount ? (
+                                  <Check className="w-4 h-4" />
+                                ) : (
+                                  <Tag className="w-4 h-4" />
+                                )}
+                              </button>
+                            </div>
+                            {discountMessage && (
+                              <div className={`mt-1 text-xs ${
+                                discount ? 'text-green-400' : 'text-[#f36e21]'
+                              }`}>
+                                {discountMessage}
+                              </div>
+                            )}
                           </div>
                         </div>
                         
@@ -945,7 +866,6 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                   </motion.div>
                 )}
                 
-                {/* Step 4: Extra items */}
                 {currentStep === 'extras' && (
                   <motion.div
                     key="extras-step"
@@ -964,7 +884,6 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                       </p>
                     </div>
                     
-                    {/* Выбранная дата, время и информация о пользователе */}
                     <div className="bg-black/20 border border-white/10 rounded-xl p-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-start">
@@ -974,7 +893,7 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                               {t('booking.date.selected')}
                             </div>
                             <div className="text-white text-sm font-medium mt-0.5">
-                              {formatDate(selectedDate!)}
+                              {selectedDate && formatDate(selectedDate)}
                             </div>
                           </div>
                         </div>
@@ -1014,7 +933,6 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                       </div>
                     </div>
                     
-                    {/* Список дополнительных услуг */}
                     <div className="bg-black/20 border border-white/10 rounded-xl p-4">
                       <CrossSellItems 
                         onItemToggle={handleCrossSellItemToggle}
@@ -1022,12 +940,9 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                         totalAdditionalPrice={totalAdditionalPrice}
                       />
                     </div>
-                    
-                    {/* Убрано дублирование информации о выбранных товарах */}
                   </motion.div>
                 )}
                 
-                {/* Step 5: Payment method */}
                 {currentStep === 'payment' && (
                   <motion.div
                     key="payment-step"
@@ -1047,7 +962,6 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                     </div>
                     
                     <div className="space-y-5">
-                      {/* Booking summary */}
                       <div className="bg-black/20 border border-white/10 p-4 rounded-xl">
                         <div className="flex items-center gap-2 mb-3">
                           <ShoppingCart className="w-5 h-5 text-[#f36e21]" />
@@ -1072,13 +986,11 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                             <span className="text-white">{formData.numberOfPeople}</span>
                           </div>
                           
-                          {/* Отображение базовой цены пакета */}
                           <div className="flex justify-between pt-3">
                             <span className="text-gray-300">{t('booking.payment.basePrice')}:</span>
                             <span className="text-white font-medium">{getPackagePrice()} PLN</span>
                           </div>
                           
-                          {/* Отображение дополнительных товаров, если они выбраны */}
                           {selectedCrossSellItems.length > 0 && (
                             <div className="space-y-1 mt-1">
                               <div className="flex justify-between">
@@ -1086,20 +998,24 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                                 <span className="text-[#f36e21] font-medium">+{totalAdditionalPrice} PLN</span>
                               </div>
                               
-                              {/* Список выбранных товаров */}
                               <div className="ml-4 space-y-1 mt-1">
-                                {selectedCrossSellItems.map((itemId) => {
-                                  return (
-                                    <div key={itemId} className="flex justify-between text-gray-400">
-                                      <span className="flex items-center">
-                                        <Check className="w-3 h-3 mr-1 text-[#f36e21]" />
-                                        {t(`home.pricing.extraItems.items.${itemId}`)}
-                                      </span>
-                                      <span>{getItemPrice(itemId)} PLN</span>
-                                    </div>
-                                  );
-                                })}
+                                {selectedCrossSellItems.map((itemId) => (
+                                  <div key={itemId} className="flex justify-between text-gray-400">
+                                    <span className="flex items-center">
+                                      <Check className="w-3 h-3 mr-1 text-[#f36e21]" />
+                                      {t(`home.pricing.extraItems.items.${itemId}`)}
+                                    </span>
+                                    <span>{getItemPrice(itemId)} PLN</span>
+                                  </div>
+                                ))}
                               </div>
+                            </div>
+                          )}
+                          
+                          {discount && (
+                            <div className="flex justify-between pt-3 border-t border-white/10">
+                              <span className="text-gray-300">{t('booking.payment.discount')}:</span>
+                              <span className="text-green-400 font-medium">-{discount.fixed_amount} PLN</span>
                             </div>
                           )}
                           
@@ -1110,7 +1026,6 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                         </div>
                       </div>
                       
-                      {/* Payment method selection */}
                       <div className="bg-black/20 border border-white/10 p-4 rounded-xl">
                         <div className="flex items-center gap-2 mb-3">
                           <PaymentIcon className="w-5 h-5 text-[#f36e21]" />
@@ -1148,7 +1063,7 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                             }`}
                           >
                             <div className="font-medium text-white text-sm mb-1">{t('booking.payment.depositPayment')}</div>
-                            <div className="text-[#f36e21] font-semibold text-lg">20 PLN</div>
+                            <div className="text-[#f36e21] font-semibold text-lg">{formData.depositAmount} PLN</div>
                             <div className="text-xs text-gray-400 mt-1.5">{t('booking.payment.depositPaymentDesc')}</div>
                             
                             {paymentMethod === 'DEPOSIT_PAID' && (
@@ -1160,7 +1075,6 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                         </div>
                       </div>
                       
-                      {/* Payment provider information */}
                       <div className="flex items-center p-3 bg-black/30 rounded-lg border border-white/10">
                         <div className="text-xs text-gray-400 mr-3">{t('booking.payment.provider')}</div>
                         <img 
@@ -1175,9 +1089,7 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
               </AnimatePresence>
             </div>
             
-            {/* Footer with navigation buttons */}
             <div className="px-5 py-4 flex justify-between shrink-0 border-t border-white/10 bg-black/30">
-              {/* Кнопка "Назад" (скрыта на первом шаге) */}
               {currentStep !== 'date' ? (
                 <button
                   type="button"
@@ -1188,10 +1100,9 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                   {t('booking.buttons.back')}
                 </button>
               ) : (
-                <div></div> // Empty div to maintain layout
+                <div></div>
               )}
               
-              {/* Кнопка "Далее" (на последнем шаге - "Забронировать") */}
               {currentStep !== 'payment' ? (
                 <button
                   type="button"
@@ -1212,7 +1123,7 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                 >
                   {isSubmitting ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2.5"></div>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       {t('booking.buttons.processing')}
                     </>
                   ) : (
@@ -1229,4 +1140,4 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
       )}
     </AnimatePresence>
   );
-} 
+}
