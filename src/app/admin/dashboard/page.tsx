@@ -345,7 +345,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="grid grid-cols-12 gap-4 text-xs font-medium text-muted-foreground border-b border-[#3a3637] pb-2">
+                <div className="grid grid-cols-12 gap-4 text-xs font-medium text-muted-foreground border-b border-[#3a3637] pb-2 mt-2">
                   <div className="col-span-1">ID</div>
                   <div className="col-span-3">Клиент</div>
                   <div className="col-span-2">Пакет</div>

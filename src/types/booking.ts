@@ -59,6 +59,7 @@ export interface BookingFormData {
   promoCode?: string;
   numberOfPeople: number; // количество человек
   crossSellItems?: string[];
+  extraItems?: Array<{id: string, name: string, price: number}>; // Дополнительные предметы
   totalAmount?: number;
   depositAmount?: number;
   paidAmount?: number;
@@ -106,6 +107,8 @@ export interface Booking {
   phone?: string; // Альтернативное поле для customerPhone
   adminComment?: string; // Комментарий администратора
   additionalServices?: Array<{id: number, name: string, price: number}>; // Дополнительные услуги
+  extraItems?: Array<{id: string, name: string, price: number}>; // Дополнительные предметы
+  crossSellItems?: string[]; // ID выбранных дополнительных предметов
 }
 
 export interface BookingAnalytics {
@@ -189,6 +192,8 @@ export function mapDatabaseBookingToBooking(dbBooking: any): Booking {
     email: dbBooking.customer_email || dbBooking.email || '',
     phone: dbBooking.customer_phone || dbBooking.phone || '',
     adminComment: dbBooking.admin_comment || '',
-    additionalServices: dbBooking.additional_services || []
+    additionalServices: dbBooking.additional_services || [],
+    extraItems: dbBooking.extra_items || [],
+    crossSellItems: dbBooking.cross_sell_items || []
   };
 }

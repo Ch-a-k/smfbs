@@ -263,7 +263,7 @@ export default function BookingsPage() {
                     <th className="text-left py-3 px-4 font-medium text-foreground">Дата и время</th>
                     <th className="text-left py-3 px-4 font-medium text-foreground">Пакет</th>
                     <th className="text-left py-3 px-4 font-medium text-foreground">Комната</th>
-                    <th className="text-left py-3 px-4 font-medium text-foreground">Статус</th>
+                    <th className="text-left py-3 px-4 font-medium text-foreground">Бронирование</th>
                     <th className="text-left py-3 px-4 font-medium text-foreground">Оплата</th>
                     <th className="text-left py-3 px-4 font-medium text-foreground">Сумма</th>
                     <th className="text-right py-3 px-4 font-medium text-foreground">Действия</th>

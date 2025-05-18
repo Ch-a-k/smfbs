@@ -83,8 +83,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     },
     {
       name: 'Промокоды',
-      href: '/admin/promocodes',
-      segment: 'promocodes',
+      href: '/admin/discounts',
+      segment: 'discounts',
       icon: <PercentDiamond className="w-5 h-5" />
     }
   ], []);

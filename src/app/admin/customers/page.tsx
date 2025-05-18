@@ -264,7 +264,7 @@ const accessToken = cookies.get('access_token');
         </CardHeader>
         <CardContent>
           <div className="rounded-md border border-[#3a3637]">
-            <div className="grid grid-cols-7 bg-[#1a1718] text-[#a0a0a0] text-xs font-medium p-3 border-b border-[#3a3637]">
+            <div className="grid grid-cols-7 bg-[#1a1718] text-[#a0a0a0] text-xs font-medium p-5 border-b border-[#3a3637]">
               <div>Клиент</div>
               <div>Контакты</div>
               <div>Бронирований</div>
@@ -284,7 +284,7 @@ const accessToken = cookies.get('access_token');
                       )}
                       <span>{customer.name}</span>
                     </div>
-                    <div className="text-[#a0a0a0]">
+                    <div className="mr-6 text-[#a0a0a0]">
                       <div>{customer.email}</div>
                       <div>{customer.phone}</div>
                     </div>
@@ -374,7 +374,7 @@ const accessToken = cookies.get('access_token');
                   />
                 </div>
               </div>
-              {!isEditing && (
+              {/* {!isEditing && (
                 <div className="space-y-2">
                   <Label htmlFor="password">Пароль</Label>
                   <Input 
@@ -388,7 +388,7 @@ const accessToken = cookies.get('access_token');
                     required={!isEditing}
                   />
                 </div>
-              )}
+              )} */}
               <div className="space-y-2">
                 <Label htmlFor="notes">Примечания</Label>
                 <Input 
