@@ -260,13 +260,13 @@ export default function RoomsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {rooms.map(room => (
-          <Card key={room.id} className={!room.is_active ? "bg-muted" : !room.available ? "bg-muted/50" : ""}>
+          <Card key={room.id} className={!room.is_active ? "bg-[#500000]/20" : !room.available ? "bg-muted/50" : ""}>
             <CardHeader className="flex flex-row items-start justify-between space-y-0">
               <div>
                 <CardTitle className="flex items-center gap-2">
                   {room.name}
                   {!room.is_active && (
-                    <Badge variant="secondary" className="bg-destructive/20 text-destructive-foreground">
+                    <Badge variant="secondary" className="bg-[#000] text-destructive-foreground animate-pulse">
                       Неактивна
                     </Badge>
                   )}

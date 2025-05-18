@@ -10,10 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, addMinutes } from 'date-fns';
-import { CalendarIcon, Check, User, Mail, Phone, Package, Clock, DoorOpen, CreditCard, Users } from 'lucide-react';
+import { CalendarIcon, Check, User, Mail, Phone, Package, Clock, DoorOpen, CreditCard, Users, Wine, Keyboard, Tv, Sofa, Printer, Mouse, Camera } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import Cookies from 'universal-cookie';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // Enums matching backend
 enum BookingStatus {
@@ -51,6 +52,8 @@ interface Room {
   max_people: number;
   is_active: boolean;
   available: boolean;
+  notes?: string;
+  work_schedule?: Record<string, any>;
 }
 
 interface Customer {
@@ -66,6 +69,47 @@ interface StatusOption {
   name: string;
   color: 'default' | 'destructive' | 'success' | 'warning' | 'info';
 }
+
+// Типы иконок для предметов
+type ItemKey = 'glass' | 'keyboard' | 'tvMonitor' | 'furniture' | 'printer' | 'mouse' | 'phone' | 'goProRecording';
+
+// Цены товаров
+const ITEM_PRICES: Record<ItemKey, number> = {
+  'glass': 50,        // 10 стеклянных предметов - 50 PLN
+  'keyboard': 20,     // Клавиатура - 20 PLN
+  'tvMonitor': 100,   // ТВ/монитор - 100 PLN
+  'furniture': 120,   // Мебель - 120 PLN
+  'printer': 50,      // Принтер - 50 PLN
+  'mouse': 10,        // Компьютерная мышь - 10 PLN
+  'phone': 30,        // Телефон - 30 PLN
+  'goProRecording': 50 // GoPro запись - 50 PLN
+};
+
+// Иконки для каждого типа предмета
+const getItemIcon = (itemKey: ItemKey) => {
+  switch (itemKey) {
+    case 'glass': return <Wine className="w-4 h-4" />;
+    case 'keyboard': return <Keyboard className="w-4 h-4" />;
+    case 'tvMonitor': return <Tv className="w-4 h-4" />;
+    case 'furniture': return <Sofa className="w-4 h-4" />;
+    case 'printer': return <Printer className="w-4 h-4" />;
+    case 'mouse': return <Mouse className="w-4 h-4" />;
+    case 'phone': return <Phone className="w-4 h-4" />;
+    case 'goProRecording': return <Camera className="w-4 h-4" />;
+  }
+};
+
+// Названия предметов
+const ITEM_NAMES: Record<ItemKey, string> = {
+  'glass': '10 стеклянных предметов',
+  'keyboard': 'Клавиатура',
+  'tvMonitor': 'ТВ/монитор',
+  'furniture': 'Мебель',
+  'printer': 'Принтер',
+  'mouse': 'Компьютерная мышь',
+  'phone': 'Телефон',
+  'goProRecording': 'GoPro запись'
+};
 
 export default function AddBookingPage() {
   const cookies = new Cookies();
@@ -108,6 +152,7 @@ export default function AddBookingPage() {
     totalPrice: number;
     paidAmount: number;
     notes: string;
+    extraItems: Partial<Record<ItemKey, number>>;
   }
 
   const [formData, setFormData] = useState<FormData>({
@@ -125,7 +170,8 @@ export default function AddBookingPage() {
     paymentStatus: PaymentStatus.PENDING,
     totalPrice: 0,
     paidAmount: 0,
-    notes: ''
+    notes: '',
+    extraItems: {} as Partial<Record<ItemKey, number>>
   });
 
   const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
@@ -199,6 +245,31 @@ export default function AddBookingPage() {
     }
   }, [formData.packageId, formData.startTime, packages]);
 
+  useEffect(() => {
+    // Calculate total price when extra items change
+    const calculateTotalPrice = () => {
+      let basePrice = 0;
+      
+      // Base price from package
+      if (formData.packageId) {
+        const selectedPackage = packages.find(p => p.id === formData.packageId);
+        if (selectedPackage) {
+          basePrice = selectedPackage.price;
+        }
+      }
+      
+      // Add extra items price
+      const extraItemsPrice = Object.entries(formData.extraItems).reduce((total, [itemKey, quantity]) => {
+        return total + ITEM_PRICES[itemKey as ItemKey] * quantity;
+      }, 0);
+      
+      return basePrice + extraItemsPrice;
+    };
+    
+    const totalPrice = calculateTotalPrice();
+    setFormData(prev => ({ ...prev, totalPrice }));
+  }, [formData.packageId, formData.extraItems, packages]);
+
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
@@ -242,6 +313,41 @@ export default function AddBookingPage() {
     }
   };
 
+  const toggleExtraItem = (itemKey: ItemKey) => {
+    setFormData(prev => {
+      const newExtraItems = { ...prev.extraItems };
+      
+      if (newExtraItems[itemKey]) {
+        delete newExtraItems[itemKey];
+      } else {
+        newExtraItems[itemKey] = 1;
+      }
+      
+      return { 
+        ...prev, 
+        extraItems: newExtraItems,
+      };
+    });
+  };
+
+  const changeItemQuantity = (itemKey: ItemKey, quantity: number) => {
+    if (quantity <= 0) {
+      setFormData(prev => {
+        const newExtraItems = { ...prev.extraItems };
+        delete newExtraItems[itemKey];
+        return { ...prev, extraItems: newExtraItems };
+      });
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        extraItems: {
+          ...prev.extraItems,
+          [itemKey]: quantity
+        }
+      }));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -260,7 +366,13 @@ export default function AddBookingPage() {
         total_price: formData.totalPrice,
         payment_status: formData.paymentStatus,
         paid_amount: formData.paidAmount,
-        notes: formData.notes
+        notes: formData.notes,
+        extra_items: Object.entries(formData.extraItems).map(([itemKey, quantity]) => ({
+          id: itemKey,
+          name: ITEM_NAMES[itemKey as ItemKey],
+          price: ITEM_PRICES[itemKey as ItemKey] * quantity,
+          quantity: quantity
+        })),
       };
 
       await fetchWithAuth('http://localhost:89/api/bookings', {
@@ -290,7 +402,8 @@ export default function AddBookingPage() {
         paymentStatus: PaymentStatus.PENDING,
         totalPrice: 0,
         paidAmount: 0,
-        notes: ''
+        notes: '',
+        extraItems: {} as Partial<Record<ItemKey, number>>
       });
       
     } catch (error) {
@@ -516,75 +629,407 @@ export default function AddBookingPage() {
                   <DoorOpen className="mr-2 h-5 w-5 text-primary" />
                   Комната и статусы
                 </CardTitle>
+                <CardDescription>
+                  Выберите комнату и установите статусы бронирования
+                </CardDescription>
               </CardHeader>
               <CardContent className="pt-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="roomId">Комната</Label>
-                    <Select 
-                      value={formData.roomId?.toString() || ''}
-                      onValueChange={(value) => handleChange('roomId', parseInt(value))}
-                      required
-                    >
-                      <SelectTrigger id="roomId">
-                        <SelectValue placeholder="Выберите комнату" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {rooms.map((room) => (
-                          <SelectItem key={room.id} value={room.id.toString()}>
-                            {room.name} (до {room.max_people} чел.)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="status">Статус бронирования</Label>
-                    <RadioGroup 
-                      value={formData.status}
-                      onValueChange={(value: BookingStatus) => handleChange('status', value)}
-                      className="flex flex-col space-y-1"
-                    >
-                      {bookingStatusOptions.map((status) => (
-                        <div key={status.id} className="flex items-center space-x-2 rounded-md border p-2 hover:bg-muted/50 cursor-pointer">
-                          <RadioGroupItem value={status.id} id={`status-${status.id}`} />
-                          <Label htmlFor={`status-${status.id}`} className="flex-grow cursor-pointer">
-                            {status.name}
-                          </Label>
-                          <Badge variant={status.color}>{status.name}</Badge>
+                <div className="grid grid-cols-1 gap-6">
+                  {/* Выбор комнаты */}
+                  <div className="border rounded-lg p-4 bg-muted/10">
+                    <h3 className="text-md font-medium mb-3 flex items-center">
+                      <DoorOpen className="mr-2 h-4 w-4 text-primary" />
+                      Комната
+                    </h3>
+                    <div className="space-y-4">
+                      <Select 
+                        value={formData.roomId?.toString() || ''}
+                        onValueChange={(value) => handleChange('roomId', parseInt(value))}
+                        required
+                      >
+                        <SelectTrigger id="roomId" className="w-full">
+                          <SelectValue placeholder="Выберите комнату" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {rooms.map((room) => (
+                            <SelectItem key={room.id} value={room.id.toString()}>
+                              <div className="flex justify-between items-center w-full">
+                                <span>{room.name}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  до {room.max_people} чел.
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      
+                      {selectedRoom && (
+                        <div className="space-y-3 mt-2">
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div className="flex items-center">
+                              <Users className="h-4 w-4 mr-2 text-muted-foreground" />
+                              <span>Вместимость: {selectedRoom.capacity}</span>
+                            </div>
+                            <div className="flex items-center">
+                              <Badge variant={selectedRoom.available ? "success" : "destructive"}>
+                                {selectedRoom.available ? "Доступна" : "Недоступна"}
+                              </Badge>
+                            </div>
+                          </div>
+                          
+                          {selectedRoom.notes && (
+                            <div className="text-sm border-t pt-2 mt-2">
+                              <span className="font-medium">Примечания:</span> 
+                              <p className="text-muted-foreground">{selectedRoom.notes}</p>
+                            </div>
+                          )}
+                          
+                          {selectedRoom.work_schedule && (
+                            <div className="text-xs border-t pt-2 mt-2">
+                              <span className="font-medium">Расписание работы:</span>
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+                                {Object.entries(selectedRoom.work_schedule).map(([day, schedule]: [string, any]) => (
+                                  schedule && schedule.isActive && (
+                                    <div key={day} className="flex justify-between">
+                                      <span className="capitalize">{day}:</span>
+                                      <span>{schedule.startTime} - {schedule.endTime}</span>
+                                    </div>
+                                  )
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      ))}
-                    </RadioGroup>
+                      )}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="paymentStatus">Статус оплаты</Label>
-                    <RadioGroup 
-                      value={formData.paymentStatus}
-                      onValueChange={(value: PaymentStatus) => handleChange('paymentStatus', value)}
-                      className="flex flex-col space-y-1"
-                    >
-                      {paymentStatusOptions.map((status) => (
-                        <div key={status.id} className="flex items-center space-x-2 rounded-md border p-2 hover:bg-muted/50 cursor-pointer">
-                          <RadioGroupItem value={status.id} id={`payment-${status.id}`} />
-                          <Label htmlFor={`payment-${status.id}`} className="flex-grow cursor-pointer">
-                            {status.name}
-                          </Label>
-                          <Badge variant={status.color}>{status.name}</Badge>
+                  
+                  {/* Статусы */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Статус бронирования */}
+                    <div className="border rounded-lg p-4 bg-muted/10">
+                      <h3 className="text-md font-medium mb-3">Статус бронирования</h3>
+                      <Select 
+                        value={formData.status}
+                        onValueChange={(value: BookingStatus) => handleChange('status', value)}
+                      >
+                        <SelectTrigger id="status" className="w-full">
+                          <SelectValue placeholder="Выберите статус" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {bookingStatusOptions.map((status) => (
+                            <SelectItem key={status.id} value={status.id}>
+                              <div className="flex items-center">
+                                <Badge variant={status.color} className="mr-2">
+                                  {status.name}
+                                </Badge>
+                                <span>{status.name}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      
+                      <div className="mt-4">
+                        <h4 className="text-sm font-medium mb-2">Текущий статус:</h4>
+                        <Badge 
+                          variant={bookingStatusOptions.find(s => s.id === formData.status)?.color || 'default'}
+                          className="w-full justify-center py-1 text-sm"
+                        >
+                          {bookingStatusOptions.find(s => s.id === formData.status)?.name || 'Не выбран'}
+                        </Badge>
+                      </div>
+                    </div>
+                    
+                    {/* Статус оплаты */}
+                    <div className="border rounded-lg p-4 bg-muted/10">
+                      <h3 className="text-md font-medium mb-3">Статус оплаты</h3>
+                      <Select 
+                        value={formData.paymentStatus}
+                        onValueChange={(value: PaymentStatus) => handleChange('paymentStatus', value)}
+                      >
+                        <SelectTrigger id="paymentStatus" className="w-full">
+                          <SelectValue placeholder="Выберите статус оплаты" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {paymentStatusOptions.map((status) => (
+                            <SelectItem key={status.id} value={status.id}>
+                              <div className="flex items-center">
+                                <Badge variant={status.color} className="mr-2">
+                                  {status.name}
+                                </Badge>
+                                <span>{status.name}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      
+                      <div className="mt-4">
+                        <h4 className="text-sm font-medium mb-2">Текущий статус оплаты:</h4>
+                        <Badge 
+                          variant={paymentStatusOptions.find(s => s.id === formData.paymentStatus)?.color || 'default'}
+                          className="w-full justify-center py-1 text-sm"
+                        >
+                          {paymentStatusOptions.find(s => s.id === formData.paymentStatus)?.name || 'Не выбран'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Информация об оплате */}
+                  <div className="border rounded-lg p-4 bg-muted/10">
+                    <h3 className="text-md font-medium mb-3 flex items-center">
+                      <CreditCard className="mr-2 h-4 w-4 text-primary" />
+                      Информация об оплате
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="totalPrice">Общая сумма (PLN)</Label>
+                        <Input
+                          id="totalPrice"
+                          name="totalPrice"
+                          type="number"
+                          min="0"
+                          value={formData.totalPrice}
+                          onChange={(e) => handleChange('totalPrice', parseFloat(e.target.value))}
+                          required
+                        />
+                        {selectedPackage && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Базовая стоимость пакета: {selectedPackage.price} PLN
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="paidAmount">Оплачено (PLN)</Label>
+                        <Input
+                          id="paidAmount"
+                          name="paidAmount"
+                          type="number"
+                          min="0"
+                          value={formData.paidAmount}
+                          onChange={(e) => handleChange('paidAmount', parseFloat(e.target.value))}
+                          required
+                        />
+                        {selectedPackage && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Рекомендуемый задаток: {selectedPackage.deposit_amount} PLN
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Индикатор прогресса оплаты */}
+                    {formData.totalPrice > 0 && (
+                      <div className="mt-4">
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>Прогресс оплаты:</span>
+                          <span>
+                            {formData.paidAmount} / {formData.totalPrice} PLN 
+                            ({Math.round((formData.paidAmount / formData.totalPrice) * 100)}%)
+                          </span>
                         </div>
-                      ))}
-                    </RadioGroup>
+                        <div className="w-full bg-muted rounded-full h-2.5">
+                          <div 
+                            className={`h-2.5 rounded-full ${
+                              formData.paidAmount >= formData.totalPrice 
+                                ? 'bg-green-500' 
+                                : formData.paidAmount > 0 
+                                  ? 'bg-amber-500' 
+                                  : 'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.min(100, Math.round((formData.paidAmount / formData.totalPrice) * 100))}%` }}
+                          ></div>
+                        </div>
+                        <div className="flex justify-between mt-2">
+                          <div className="text-xs">
+                            {formData.paidAmount <= 0 && <span className="text-red-500">Не оплачено</span>}
+                            {formData.paidAmount > 0 && formData.paidAmount < formData.totalPrice && (
+                              <span className="text-amber-500">
+                                Частично оплачено (осталось {(formData.totalPrice - formData.paidAmount).toFixed(2)} PLN)
+                              </span>
+                            )}
+                            {formData.paidAmount >= formData.totalPrice && <span className="text-green-500">Полностью оплачено</span>}
+                          </div>
+                          {formData.paymentStatus && (
+                            <Badge 
+                              variant={paymentStatusOptions.find(s => s.id === formData.paymentStatus)?.color || 'default'}
+                            >
+                              {paymentStatusOptions.find(s => s.id === formData.paymentStatus)?.name}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="notes">Примечания</Label>
-                    <Input
-                      id="notes"
-                      name="notes"
-                      value={formData.notes}
-                      onChange={(e) => handleChange('notes', e.target.value)}
-                      placeholder="Дополнительная информация"
-                    />
+                  
+                  {/* Примечания */}
+                  <div className="border rounded-lg p-4 bg-muted/10">
+                    <h3 className="text-md font-medium mb-2 flex items-center">
+                      <Mail className="mr-2 h-4 w-4 text-primary" />
+                      Примечания
+                    </h3>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Добавьте важную информацию о бронировании, особые пожелания клиента или другие заметки для персонала
+                    </p>
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <textarea
+                          id="notes"
+                          name="notes"
+                          value={formData.notes}
+                          onChange={(e) => handleChange('notes', e.target.value)}
+                          placeholder="Например: Клиент запросил особое расположение мебели, нужны дополнительные стулья, аллергия на определенные материалы и т.д."
+                          className="w-full min-h-[120px] px-3 py-2 rounded-md border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        />
+                        <div className="absolute bottom-2 right-2 text-xs text-muted-foreground">
+                          {formData.notes.length} символов
+                        </div>
+                      </div>
+                      
+                      {formData.notes && (
+                        <div className="mt-3 p-3 bg-muted/30 rounded-md border">
+                          <h4 className="text-sm font-medium mb-1">Предпросмотр:</h4>
+                          <div className="text-sm whitespace-pre-wrap">
+                            {formData.notes}
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleChange('notes', formData.notes + (formData.notes ? '\n' : '') + '• Особые пожелания: ')}
+                        >
+                          + Особые пожелания
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleChange('notes', formData.notes + (formData.notes ? '\n' : '') + '• Аллергия: ')}
+                        >
+                          + Аллергия
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleChange('notes', formData.notes + (formData.notes ? '\n' : '') + '• Контакт: ')}
+                        >
+                          + Контакт
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Дополнительные предметы */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Дополнительные предметы
+                </CardTitle>
+                <CardDescription>
+                  Выберите дополнительные предметы, которые клиент хочет включить в заказ
+                </CardDescription>
+              </CardHeader>
+              
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4 mb-4 ">
+                  {(Object.keys(ITEM_PRICES) as ItemKey[]).map((itemKey) => (
+                    <div 
+                      key={itemKey}
+                      className={`
+                        flex items-center space-x-3 p-3 rounded-md cursor-pointer hover:bg-muted/90
+                        ${itemKey in formData.extraItems ? 'bg-slate-100 border-slate-200 border' : 'bg-muted/30 border-slate-100 border'}
+                      `}
+                      onClick={() => toggleExtraItem(itemKey)}
+                    >
+                      <div className="flex items-center">
+                        <Checkbox
+                          checked={itemKey in formData.extraItems}
+                          onCheckedChange={() => toggleExtraItem(itemKey)}
+                          id={`item-${itemKey}`}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center">
+                          <div className="mr-2 text-orange-500">
+                            {getItemIcon(itemKey)}
+                          </div>
+                          <Label
+                            htmlFor={`item-${itemKey}`}
+                            className="font-medium cursor-pointer"
+                          >
+                            {ITEM_NAMES[itemKey]}
+                          </Label>
+                        </div>
+                        <div className="text-sm text-slate-500 ml-6">
+                          {ITEM_PRICES[itemKey]} PLN
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {Object.keys(formData.extraItems).length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-slate-200">
+                    <div className="text-sm font-medium">Выбранные предметы:</div>
+                    <div className="mt-2 space-y-1">
+                      {Object.entries(formData.extraItems).map(([itemKey, quantity]) => (
+                        <div key={itemKey} className="flex justify-between items-center text-sm py-2">
+                          <span className="flex items-center gap-2">
+                            <span className="text-orange-500">{getItemIcon(itemKey as ItemKey)}</span>
+                            {ITEM_NAMES[itemKey as ItemKey]}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center border rounded-md">
+                              <button 
+                                type="button"
+                                className="px-2 py-1 hover:bg-slate-100" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  changeItemQuantity(itemKey as ItemKey, quantity - 1);
+                                }}
+                              >
+                                -
+                              </button>
+                              <span className="px-3">{quantity}</span>
+                              <button 
+                                type="button"
+                                className="px-2 py-1 hover:bg-slate-100" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  changeItemQuantity(itemKey as ItemKey, quantity + 1);
+                                }}
+                              >
+                                +
+                              </button>
+                            </div>
+                            <span className="font-medium w-20 text-right">
+                              {ITEM_PRICES[itemKey as ItemKey] * quantity} PLN
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-200 font-medium">
+                      <span>Дополнительно:</span>
+                      <span className="text-orange-600">
+                        +{Object.entries(formData.extraItems).reduce((sum, [itemKey, quantity]) => 
+                          sum + ITEM_PRICES[itemKey as ItemKey] * quantity, 0)} PLN
+                      </span>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

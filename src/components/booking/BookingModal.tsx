@@ -13,6 +13,7 @@ import { Package as BasePackage, BookingFormData, PaymentStatus } from '@/types/
 import BookingCalendar from './BookingCalendar';
 import TimeSelector from './TimeSelector';
 import CrossSellItems, { CrossSellItem } from './CrossSellItems';
+import ExtraItemsSelector, { ExtraItem } from './ExtraItemsSelector';
 import Cookies from "universal-cookie";
 
 type BookingStep = 'date' | 'time' | 'contact' | 'extras' | 'payment';
@@ -62,6 +63,8 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedCrossSellItems, setSelectedCrossSellItems] = useState<string[]>([]);
   const [totalAdditionalPrice, setTotalAdditionalPrice] = useState(0);
+  const [selectedExtraItems, setSelectedExtraItems] = useState<string[]>([]);
+  const [totalExtraItemsPrice, setTotalExtraItemsPrice] = useState(0);
   
   const [formData, setFormData] = useState<BookingFormData>({
     packageId: packageData.id,
@@ -77,6 +80,7 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     promoCode: '',
     comment: '',
     crossSellItems: [],
+    extraItems: [],
     totalAmount: getPackagePrice(),
     depositAmount: packageData.depositAmount || 20,
   });
@@ -94,7 +98,7 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
 
   const calculateTotalAmount = (): number => {
     const basePrice = getPackagePrice();
-    const total = basePrice + totalAdditionalPrice;
+    const total = basePrice + totalAdditionalPrice + totalExtraItemsPrice;
     if (discount) {
       return Math.max(0, total - discount.fixed_amount);
     }
@@ -255,7 +259,8 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
           paid_amount: paymentMethod === 'FULLY_PAID' 
             ? formData.totalAmount 
             : formData.depositAmount,
-          additional_items: selectedCrossSellItems,
+          cross_sell_items: selectedCrossSellItems,
+          extra_items: formData.extraItems,
           notes: formData.comment,
           promo_code: formData.promoCode
         }),
@@ -329,6 +334,60 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     });
   };
 
+  const handleExtraItemToggle = (item: ExtraItem) => {
+    const isSelected = selectedExtraItems.includes(item.id);
+    let newSelectedItems: string[];
+    
+    if (isSelected) {
+      newSelectedItems = selectedExtraItems.filter(id => id !== item.id);
+    } else {
+      newSelectedItems = [...selectedExtraItems, item.id];
+    }
+    
+    setSelectedExtraItems(newSelectedItems);
+    
+    // Пересчитываем общую стоимость дополнительных предметов
+    const totalPrice = newSelectedItems.reduce((total, itemId) => {
+      const itemPrice = getExtraItemPrice(itemId);
+      return total + itemPrice;
+    }, 0);
+    
+    setTotalExtraItemsPrice(totalPrice);
+    
+    // Обновляем объекты выбранных предметов
+    const extraItems = newSelectedItems.map(itemId => {
+      const name = t(`home.pricing.extraItems.items.${itemId}`).split(' - ')[0];
+      const price = getExtraItemPrice(itemId);
+      return {
+        id: itemId,
+        name,
+        price
+      };
+    });
+    
+    setFormData(prev => ({
+      ...prev,
+      totalAmount: calculateTotalAmount(),
+      extraItems
+    }));
+  };
+
+  const getExtraItemPrice = (itemId: string): number => {
+    // Цены товаров
+    const prices: Record<string, number> = {
+      'glass': 50,
+      'keyboard': 20,
+      'tvMonitor': 100,
+      'furniture': 120,
+      'printer': 50,
+      'mouse': 10,
+      'phone': 30,
+      'goProRecording': 50
+    };
+    
+    return prices[itemId] || 0;
+  };
+
   const validateDateStep = () => {
     if (!selectedDate) {
       setErrorMessage(t('booking.validation.dateRequired'));
@@ -369,12 +428,18 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
     return true;
   };
 
+  const validateExtrasStep = () => {
+    // Проверка не требуется, можно всегда переходить дальше
+    return true;
+  };
+
   const handleNextStep = () => {
     setErrorMessage('');
     
     if (currentStep === 'date' && !validateDateStep()) return;
     if (currentStep === 'time' && !validateTimeStep()) return;
     if (currentStep === 'contact' && !validateContactStep()) return;
+    if (currentStep === 'extras' && !validateExtrasStep()) return;
     
     const nextSteps: Record<BookingStep, BookingStep> = {
       date: 'time',
@@ -431,6 +496,8 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
       setSelectedTime(null);
       setSelectedCrossSellItems([]);
       setTotalAdditionalPrice(0);
+      setSelectedExtraItems([]);
+      setTotalExtraItemsPrice(0);
       setDiscount(null);
       setDiscountMessage('');
       setFormData({
@@ -447,6 +514,7 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
         promoCode: '',
         comment: '',
         crossSellItems: [],
+        extraItems: [],
         totalAmount: getPackagePrice(),
         depositAmount: packageData.depositAmount || 20,
       });
@@ -938,6 +1006,14 @@ export default function BookingModal({ isOpen, onClose, packageData }: BookingMo
                         onItemToggle={handleCrossSellItemToggle}
                         selectedItems={selectedCrossSellItems}
                         totalAdditionalPrice={totalAdditionalPrice}
+                      />
+                    </div>
+                    
+                    <div className="mt-6 pt-6 border-t border-white/10">
+                      <ExtraItemsSelector 
+                        onItemToggle={handleExtraItemToggle}
+                        selectedItems={selectedExtraItems}
+                        totalAdditionalPrice={totalExtraItemsPrice}
                       />
                     </div>
                   </motion.div>
